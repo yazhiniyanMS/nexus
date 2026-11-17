@@ -1,6 +1,7 @@
 //! Git intelligence. Read-only: shells out to the user's `git` so behaviour matches their CLI.
 
 use crate::error::{AppError, Result};
+use crate::platform;
 use crate::projects::project_root;
 use crate::AppState;
 use serde::Serialize;
@@ -10,17 +11,16 @@ use tauri::State;
 
 const MAX_DIFF_BYTES: usize = 400_000;
 
-fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = Command::new("git");
+pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
+    let program = platform::programs::git().ok_or(platform::programs::git_missing_message())?;
+    let mut cmd = Command::new(program);
     cmd.arg("-C").arg(dir).args(args).env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
+    // Hooks, credential helpers and pagers Git starts need the user's search path too.
+    cmd.env("PATH", platform::env::search_path());
+    platform::process::hide_window(&mut cmd);
     let out = cmd.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            AppError::Msg("Git is not installed or not on PATH".into())
+            AppError::Msg(platform::programs::git_missing_message().into())
         } else {
             AppError::Io(e)
         }
@@ -211,13 +211,7 @@ pub async fn git_log(state: State<'_, AppState>, project_id: String, limit: Opti
 }
 
 #[tauri::command]
-pub async fn git_diff(
-    state: State<'_, AppState>,
-    project_id: String,
-    path: String,
-    staged: bool,
-    untracked: bool,
-) -> Result<String> {
+pub async fn git_diff(state: State<'_, AppState>, project_id: String, path: String, staged: bool, untracked: bool) -> Result<String> {
     let root = project_root(&state, &project_id)?;
     if untracked {
         // Untracked files have no diff; show them as an all-added patch.
@@ -243,6 +237,36 @@ pub async fn git_show(state: State<'_, AppState>, project_id: String, hash: Stri
     Ok(truncate(git(&root, &["show", "--no-color", "--stat", "--patch", "--format=fuller", &hash])?))
 }
 
+fn stage_paths(root: &Path, paths: &[String]) -> Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut args = vec!["add", "--"];
+    args.extend(paths.iter().map(String::as_str));
+    git(root, &args).map(|_| ())
+}
+
+/// Remove paths from the index only. The working tree is never touched, so no edits can be lost.
+fn unstage_paths(root: &Path, paths: &[String]) -> Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let has_head = git(root, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok();
+    let mut args = if has_head { vec!["restore", "--staged", "--"] } else { vec!["rm", "--cached", "-q", "--"] };
+    args.extend(paths.iter().map(String::as_str));
+    git(root, &args).map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_stage(state: State<'_, AppState>, project_id: String, paths: Vec<String>) -> Result<()> {
+    stage_paths(&project_root(&state, &project_id)?, &paths)
+}
+
+#[tauri::command]
+pub async fn git_unstage(state: State<'_, AppState>, project_id: String, paths: Vec<String>) -> Result<()> {
+    unstage_paths(&project_root(&state, &project_id)?, &paths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,5 +288,57 @@ mod tests {
         assert_eq!(s.files[1].orig_path.as_deref(), Some("old.rs"));
         assert!(s.files[2].conflicted);
         assert!(s.files[3].untracked);
+    }
+    /// Runs the real git binary against a throwaway repository.
+    #[test]
+    fn reads_a_real_repository() {
+        let dir = crate::projects::tests::temp_project(&[("a.txt", "one\n")]);
+        let g = |args: &[&str]| git(&dir, args).unwrap();
+        g(&["init", "-q", "-b", "main"]);
+        g(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "first"]);
+        assert!(is_repo(&dir));
+        let s = parse_status(&g(&["status", "--porcelain=v2", "--branch", "--untracked-files=all"]));
+        assert_eq!(s.branch.as_deref(), Some("main"));
+        assert_eq!(s.files.len(), 1);
+        assert!(s.files[0].untracked);
+        g(&["add", "a.txt"]);
+        let s = parse_status(&g(&["status", "--porcelain=v2", "--branch"]));
+        assert_eq!((s.files[0].index.as_str(), s.files[0].path.as_str()), ("A", "a.txt"));
+        assert!(g(&["diff", "--cached", "--", "a.txt"]).contains("+one"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn staging_and_unstaging_never_change_the_working_tree() {
+        let dir = crate::projects::tests::temp_project(&[("a.txt", "one\n"), ("gone.txt", "bye\n")]);
+        let g = |args: &[&str]| git(&dir, args).unwrap();
+        let status = || parse_status(&g(&["status", "--porcelain=v2", "--untracked-files=all"]));
+        let entry = |s: &Status, p: &str| s.files.iter().find(|f| f.path == p).map(|f| (f.index.clone(), f.worktree.clone()));
+        g(&["init", "-q", "-b", "main"]);
+
+        // Before the first commit: stage then unstage a new file.
+        stage_paths(&dir, &["a.txt".into()]).unwrap();
+        assert_eq!(entry(&status(), "a.txt"), Some(("A".into(), ".".into())));
+        unstage_paths(&dir, &["a.txt".into()]).unwrap();
+        assert!(status().files.iter().all(|f| f.untracked));
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\n");
+
+        g(&["add", "."]);
+        g(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "first"]);
+
+        // After a commit: an edit and a deletion.
+        std::fs::write(dir.join("a.txt"), "one\ntwo, unsaved work\n").unwrap();
+        std::fs::remove_file(dir.join("gone.txt")).unwrap();
+        stage_paths(&dir, &["a.txt".into(), "gone.txt".into()]).unwrap();
+        let s = status();
+        assert_eq!(entry(&s, "a.txt"), Some(("M".into(), ".".into())));
+        assert_eq!(entry(&s, "gone.txt"), Some(("D".into(), ".".into())));
+
+        unstage_paths(&dir, &["a.txt".into(), "gone.txt".into()]).unwrap();
+        let s = status();
+        assert_eq!(entry(&s, "a.txt"), Some((".".into(), "M".into())));
+        assert_eq!(entry(&s, "gone.txt"), Some((".".into(), "D".into())));
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo, unsaved work\n", "edits must survive");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

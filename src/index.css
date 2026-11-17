@@ -1,16 +1,36 @@
 @import "tailwindcss";
 
+/* NEXUS design tokens. Every colour, radius and font in the app comes from here.
+   Surfaces are near-black; mint marks success, live connections and primary actions;
+   lavender marks focus and intelligence/model features. Neither accent fills large areas. */
 @theme {
-  --color-bg: #050506;
-  --color-panel: #0c0c0e;
-  --color-raised: #141417;
-  --color-line: #232327;
-  --color-ink: #ededee;
-  --color-dim: #9a9aa3;
-  --color-faint: #63636b;
-  --color-accent: #34d399;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Surfaces, darkest to lightest */
+  --color-bg: #060607;
+  --color-panel: #0d0d10;
+  --color-raised: #15151a;
+  --color-hover: #1c1c22;
+  /* Borders */
+  --color-line: #23232a;
+  --color-line-strong: #32323b;
+  /* Text */
+  --color-ink: #ececf0;
+  --color-dim: #9c9ca8;
+  --color-faint: #666672;
+  /* Accents */
+  --color-accent: #86dfc4; /* mint */
+  --color-lav: #b4a8f2; /* lavender */
+  /* Status */
+  --color-ok: #86dfc4;
+  --color-warn: #e2c27e;
+  --color-danger: #ef8f8f;
+  /* Radii: small controls, cards, dialogs */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  /* Type */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
 
 html,
@@ -44,7 +64,7 @@ input,
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2f;
+  background: var(--color-line-strong);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -54,6 +74,18 @@ input,
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 1.5px solid var(--color-lav);
   outline-offset: 1px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-lav) 30%, transparent);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }

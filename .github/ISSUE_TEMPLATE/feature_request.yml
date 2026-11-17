@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest something NEXUS should do
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the NEXUS public beta. Please do not paste source code, API keys or terminal output you would not post in public.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or workflow, before any solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: input
+    id: version
+    attributes:
+      label: NEXUS version
+      description: Shown under "About & feedback" in the sidebar.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS (Apple Silicon), macOS (Intel), Windows 11, Windows 10, Linux (Ubuntu/Debian), Linux (Fedora/RHEL), Linux (other)]
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic report
+      description: In NEXUS open "About & feedback", read the report, then paste it here. It contains versions and counts only; edit out anything you do not want to share.
+      render: text

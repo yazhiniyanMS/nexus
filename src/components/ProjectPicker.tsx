@@ -5,7 +5,8 @@ export function ProjectPicker({ ws, className }: { ws: Workspace; className?: st
   return (
     <Select
       aria-label="Project"
-      className={className ?? "w-56"}
+      className={className ?? "w-56!"}
+      title="Current project"
       value={ws.projectId ?? ""}
       onChange={(e) => ws.selectProject(e.target.value || null)}
     >

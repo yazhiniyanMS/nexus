@@ -1,0 +1,48 @@
+name: Windows compatibility
+description: Something behaves wrongly only on Windows
+title: "[Windows] "
+labels: ["windows"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the NEXUS public beta. Please do not paste source code, API keys or terminal output you would not post in public.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Installer, Terminal (PowerShell / Command Prompt), Git, Paths and files, Tasks and agent commands, Model Lab, API key storage, Appearance, Other]
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell and Windows build
+      placeholder: "PowerShell 7.4, Windows 11 23H2"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NEXUS version
+      description: Shown under "About & feedback" in the sidebar.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS (Apple Silicon), macOS (Intel), Windows 11, Windows 10, Linux (Ubuntu/Debian), Linux (Fedora/RHEL), Linux (other)]
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic report
+      description: In NEXUS open "About & feedback", read the report, then paste it here. It contains versions and counts only; edit out anything you do not want to share.
+      render: text

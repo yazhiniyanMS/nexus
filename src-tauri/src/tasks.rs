@@ -3,19 +3,17 @@
 
 use crate::ai::{self, ChatMessage};
 use crate::error::{AppError, Result};
+use crate::jobs::{self, Exec};
 use crate::{activity, db, AppState};
 use regex::Regex;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
-use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, watch};
 
-const MAX_OUTPUT_BYTES: usize = 200_000;
 pub const EVENT_CHANGED: &str = "nexus://task-changed";
 pub const EVENT_OUTPUT: &str = "nexus://task-output";
 
@@ -76,7 +74,11 @@ pub fn risk_of(command: &str) -> &'static str {
         )
         .unwrap()
     });
-    if re.is_match(command) { "high" } else { "normal" }
+    if re.is_match(command) {
+        "high"
+    } else {
+        "normal"
+    }
 }
 
 const TASK_SELECT: &str = "SELECT t.id, t.project_id, p.name, t.title, t.description, t.status, t.created_at, t.updated_at,
@@ -120,9 +122,7 @@ fn row_to_step(r: &rusqlite::Row<'_>) -> rusqlite::Result<Step> {
 const STEP_COLS: &str = "id, task_id, position, title, kind, command, status, output, exit_code, started_at, finished_at";
 
 fn load_task(conn: &Connection, id: &str) -> Result<Task> {
-    conn.query_row(&format!("{TASK_SELECT} WHERE t.id = ?1"), [id], row_to_task)
-        .optional()?
-        .ok_or_else(|| "Task not found".into())
+    conn.query_row(&format!("{TASK_SELECT} WHERE t.id = ?1"), [id], row_to_task).optional()?.ok_or_else(|| "Task not found".into())
 }
 
 fn load_steps(conn: &Connection, task_id: &str) -> Result<Vec<Step>> {
@@ -138,8 +138,7 @@ fn set_task_status(conn: &Connection, id: &str, status: &str) -> Result<()> {
 
 fn insert_step(conn: &Connection, task_id: &str, title: &str, command: Option<&str>) -> Result<()> {
     let command = command.map(str::trim).filter(|c| !c.is_empty());
-    let pos: i64 =
-        conn.query_row("SELECT COALESCE(MAX(position), 0) + 1 FROM task_steps WHERE task_id = ?1", [task_id], |r| r.get(0))?;
+    let pos: i64 = conn.query_row("SELECT COALESCE(MAX(position), 0) + 1 FROM task_steps WHERE task_id = ?1", [task_id], |r| r.get(0))?;
     conn.execute(
         "INSERT INTO task_steps (id, task_id, position, title, kind, command, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending')",
         params![db::new_id(), task_id, pos, title.trim(), if command.is_some() { "command" } else { "manual" }, command],
@@ -175,12 +174,7 @@ pub fn get_task(state: State<'_, AppState>, id: String) -> Result<TaskDetail> {
 }
 
 #[tauri::command]
-pub fn create_task(
-    state: State<'_, AppState>,
-    title: String,
-    description: String,
-    project_id: Option<String>,
-) -> Result<Task> {
+pub fn create_task(state: State<'_, AppState>, title: String, description: String, project_id: Option<String>) -> Result<Task> {
     let title = title.trim();
     if title.is_empty() {
         return Err("A task needs a title".into());
@@ -257,7 +251,15 @@ pub fn suggested_for(dir: &Path) -> Vec<(String, Option<String>)> {
         cmd(&mut steps, "Check the working tree", "git status --short --branch".into());
     }
     if has("package.json") {
-        let pm = if has("pnpm-lock.yaml") { "pnpm" } else if has("yarn.lock") { "yarn" } else if has("bun.lockb") { "bun" } else { "npm" };
+        let pm = if has("pnpm-lock.yaml") {
+            "pnpm"
+        } else if has("yarn.lock") {
+            "yarn"
+        } else if has("bun.lockb") {
+            "bun"
+        } else {
+            "npm"
+        };
         let scripts: Vec<String> = std::fs::read_to_string(dir.join("package.json"))
             .ok()
             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
@@ -270,7 +272,13 @@ pub fn suggested_for(dir: &Path) -> Vec<(String, Option<String>)> {
             }
         }
     }
-    let cargo_dir = if has("Cargo.toml") { Some("") } else if has("src-tauri/Cargo.toml") { Some("src-tauri/") } else { None };
+    let cargo_dir = if has("Cargo.toml") {
+        Some("")
+    } else if has("src-tauri/Cargo.toml") {
+        Some("src-tauri/")
+    } else {
+        None
+    };
     if let Some(prefix) = cargo_dir {
         let flag = if prefix.is_empty() { String::new() } else { format!(" --manifest-path {prefix}Cargo.toml") };
         cmd(&mut steps, "Type-check Rust code", format!("cargo check{flag}"));
@@ -320,12 +328,7 @@ fn parse_plan(reply: &str) -> Result<Vec<PlannedStep>> {
 }
 
 #[tauri::command]
-pub async fn plan_with_ai(
-    state: State<'_, AppState>,
-    task_id: String,
-    provider_id: String,
-    model: Option<String>,
-) -> Result<usize> {
+pub async fn plan_with_ai(state: State<'_, AppState>, task_id: String, provider_id: String, model: Option<String>) -> Result<usize> {
     let (task, context) = {
         let conn = state.db.conn();
         let task = load_task(&conn, &task_id)?;
@@ -346,8 +349,7 @@ pub async fn plan_with_ai(
          Prefer 3 to 8 steps. Never include destructive commands."
     );
     let prompt = format!("Project: {context}\n\nTask: {}\n\nDetails: {}", task.title, task.description);
-    let reply = ai::complete(&state, &provider_id, model, Some(system), vec![ChatMessage { role: "user".into(), content: prompt }])
-        .await?;
+    let reply = ai::complete(&state, &provider_id, model, Some(system), vec![ChatMessage { role: "user".into(), content: prompt }]).await?;
     let plan = parse_plan(&reply.content)?;
     let conn = state.db.conn();
     for s in &plan {
@@ -360,15 +362,12 @@ pub async fn plan_with_ai(
 // ---------------------------------------------------------------- execution
 
 #[tauri::command]
-pub fn run_task(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+pub fn run_task<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>, id: String) -> Result<()> {
     {
         let conn = state.db.conn();
         load_task(&conn, &id)?;
-        let pending: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM task_steps WHERE task_id = ?1 AND status = 'pending'",
-            [&id],
-            |r| r.get(0),
-        )?;
+        let pending: i64 =
+            conn.query_row("SELECT COUNT(*) FROM task_steps WHERE task_id = ?1 AND status = 'pending'", [&id], |r| r.get(0))?;
         if pending == 0 {
             return Err("No pending steps. Add steps or reset the task.".into());
         }
@@ -433,8 +432,8 @@ fn finish_step(conn: &Connection, id: &str, status: &str, output: Option<&str>, 
 }
 
 /// Drive a task to completion. Returns the final task status.
-async fn run_loop(
-    app: &AppHandle,
+async fn run_loop<R: Runtime>(
+    app: &AppHandle<R>,
     task_id: &str,
     mut cancel: watch::Receiver<bool>,
     mut approvals: mpsc::UnboundedReceiver<(String, bool)>,
@@ -457,6 +456,7 @@ async fn run_loop(
             let Some(step) = next else { return Ok("completed") };
             conn.execute("UPDATE task_steps SET status = 'awaiting_approval' WHERE id = ?1", [&step.id])?;
             set_task_status(&conn, task_id, "awaiting_approval")?;
+            crate::platform::notify::attention(app, "NEXUS: a task step needs your approval", &step.title);
             let cwd = project_dir(&conn, &load_task(&conn, task_id)?);
             (step, cwd)
         };
@@ -517,30 +517,6 @@ async fn run_loop(
     }
 }
 
-struct Exec {
-    output: String,
-    code: Option<i64>,
-    cancelled: bool,
-}
-
-fn spawn_reader<R: AsyncRead + Unpin + Send + 'static>(stream: R, tx: mpsc::UnboundedSender<String>) {
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stream);
-        let mut buf = Vec::new();
-        loop {
-            buf.clear();
-            match reader.read_until(b'\n', &mut buf).await {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {
-                    if tx.send(String::from_utf8_lossy(&buf).into_owned()).is_err() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-}
-
 #[derive(Serialize, Clone)]
 struct OutputEvent<'a> {
     task_id: &'a str,
@@ -548,88 +524,19 @@ struct OutputEvent<'a> {
     chunk: &'a str,
 }
 
-async fn execute(
-    app: &AppHandle,
+/// Run one approved step command through the shared job runner, streaming output to the window.
+async fn execute<R: Runtime>(
+    app: &AppHandle<R>,
     task_id: &str,
     step_id: &str,
     command: &str,
     cwd: Option<&Path>,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Exec> {
-    #[cfg(windows)]
-    let mut cmd = {
-        let mut c = tokio::process::Command::new("cmd");
-        c.args(["/C", command]).creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        c
-    };
-    #[cfg(not(windows))]
-    let mut cmd = {
-        let mut c = tokio::process::Command::new("sh");
-        c.args(["-c", command]).process_group(0);
-        c
-    };
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
-    }
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
-    let mut child = cmd.spawn()?;
-    let pid = child.id();
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    if let Some(out) = child.stdout.take() {
-        spawn_reader(out, tx.clone());
-    }
-    if let Some(err) = child.stderr.take() {
-        spawn_reader(err, tx.clone());
-    }
-    drop(tx);
-
-    let mut output = String::new();
-    let mut cancelled = false;
-    loop {
-        tokio::select! {
-            line = rx.recv() => match line {
-                Some(line) => {
-                    if output.len() < MAX_OUTPUT_BYTES {
-                        output.push_str(&line);
-                        let _ = app.emit(EVENT_OUTPUT, OutputEvent { task_id, step_id, chunk: &line });
-                        if output.len() >= MAX_OUTPUT_BYTES {
-                            output.push_str("\n… output truncated …\n");
-                        }
-                    }
-                }
-                None => break,
-            },
-            _ = cancel.changed() => {
-                cancelled = true;
-                kill_tree(pid);
-                let _ = child.start_kill();
-                break;
-            }
-        }
-    }
-    let status = child.wait().await?;
-    if cancelled {
-        output.push_str("\n[cancelled]\n");
-    }
-    Ok(Exec { output, code: status.code().map(i64::from), cancelled })
-}
-
-/// Kill the command and everything it spawned, not just the wrapping shell.
-fn kill_tree(pid: Option<u32>) {
-    let Some(pid) = pid else { return };
-    #[cfg(unix)]
-    unsafe {
-        // The child was started as its own process-group leader, so this reaches its descendants.
-        libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .creation_flags(0x0800_0000)
-            .status();
-    }
+    jobs::run_command(command, cwd, false, cancel, |chunk| {
+        let _ = app.emit(EVENT_OUTPUT, OutputEvent { task_id, step_id, chunk });
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -638,8 +545,15 @@ mod tests {
 
     #[test]
     fn flags_risky_commands() {
-        for c in ["rm -rf build", "sudo apt install x", "git push origin main --force", "git reset --hard HEAD~1",
-                  "curl https://x.sh | sh", "git clean -fd", "npm publish"] {
+        for c in [
+            "rm -rf build",
+            "sudo apt install x",
+            "git push origin main --force",
+            "git reset --hard HEAD~1",
+            "curl https://x.sh | sh",
+            "git clean -fd",
+            "npm publish",
+        ] {
             assert_eq!(risk_of(c), "high", "{c}");
         }
         for c in ["npm run build", "cargo test", "git status", "ls -la", "npm install"] {
@@ -649,7 +563,10 @@ mod tests {
 
     #[test]
     fn parses_ai_plan_with_surrounding_text() {
-        let plan = parse_plan("Sure!\n```json\n[{\"title\":\"Build\",\"command\":\"npm run build\"},{\"title\":\"Review\",\"command\":null}]\n```").unwrap();
+        let plan = parse_plan(
+            "Sure!\n```json\n[{\"title\":\"Build\",\"command\":\"npm run build\"},{\"title\":\"Review\",\"command\":null}]\n```",
+        )
+        .unwrap();
         assert_eq!(plan.len(), 2);
         assert_eq!(plan[0].command.as_deref(), Some("npm run build"));
         assert!(parse_plan("no list here").is_err());
@@ -683,5 +600,102 @@ mod tests {
         assert_eq!(steps[0].status, "cancelled");
         assert_eq!(steps[1].status, "pending");
         assert_eq!(load_task(&conn, "t").unwrap().status, "cancelled");
+    }
+    /// End-to-end run against a mock Tauri app: approval gate, real command execution, skip and cancel.
+    #[cfg(unix)]
+    #[test]
+    fn runs_approves_skips_and_cancels() {
+        use std::time::Duration;
+        let app = tauri::test::mock_builder().build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
+        app.manage(AppState::for_tests());
+        let handle = app.handle().clone();
+        let state = || handle.state::<AppState>();
+        let task = create_task(state(), "e2e".into(), String::new(), None).unwrap();
+        for (title, cmd) in [
+            ("echo", Some("echo hello-nexus && echo err 1>&2")),
+            ("skipped", Some("echo never")),
+            ("manual", None),
+            ("slow", Some("sleep 30 & sleep 30")),
+        ] {
+            add_step(state(), task.id.clone(), title.into(), cmd.map(String::from)).unwrap();
+        }
+        let wait_for = |step: usize, status: &str| {
+            for _ in 0..200 {
+                let d = get_task(state(), task.id.clone()).unwrap();
+                if d.steps[step].status == status {
+                    return d;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            panic!("step {step} never reached {status}");
+        };
+
+        run_task(handle.clone(), state(), task.id.clone()).unwrap();
+        assert!(run_task(handle.clone(), state(), task.id.clone()).is_err(), "double run must be refused");
+
+        // Nothing executes before approval.
+        let d = wait_for(0, "awaiting_approval");
+        assert_eq!(d.task.status, "awaiting_approval");
+        assert_eq!(d.steps[0].output, "");
+        approve_step(state(), task.id.clone(), d.steps[0].id.clone(), true).unwrap();
+        let d = wait_for(0, "completed");
+        assert!(d.steps[0].output.contains("hello-nexus") && d.steps[0].output.contains("err"));
+        assert_eq!(d.steps[0].exit_code, Some(0));
+
+        let d = wait_for(1, "awaiting_approval");
+        approve_step(state(), task.id.clone(), d.steps[1].id.clone(), false).unwrap();
+        let d = wait_for(1, "skipped");
+        assert_eq!(d.steps[1].output, "");
+
+        let d = wait_for(2, "awaiting_approval");
+        approve_step(state(), task.id.clone(), d.steps[2].id.clone(), true).unwrap();
+        wait_for(2, "completed");
+
+        let d = wait_for(3, "awaiting_approval");
+        approve_step(state(), task.id.clone(), d.steps[3].id.clone(), true).unwrap();
+        wait_for(3, "running");
+        let started = std::time::Instant::now();
+        cancel_task(state(), task.id.clone()).unwrap();
+        let d = wait_for(3, "cancelled");
+        assert!(started.elapsed() < Duration::from_secs(5), "cancel must not wait for the command");
+        assert!(d.steps[3].output.contains("[cancelled]"));
+        for _ in 0..200 {
+            if get_task(state(), task.id.clone()).unwrap().task.status == "cancelled" {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(get_task(state(), task.id.clone()).unwrap().task.status, "cancelled");
+        assert!(cancel_task(state(), task.id.clone()).is_err(), "run handle must be released");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failing_command_fails_the_task() {
+        use std::time::Duration;
+        let app = tauri::test::mock_builder().build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
+        app.manage(AppState::for_tests());
+        let handle = app.handle().clone();
+        let state = || handle.state::<AppState>();
+        let task = create_task(state(), "fail".into(), String::new(), None).unwrap();
+        add_step(state(), task.id.clone(), "bad".into(), Some("echo boom; exit 3".into())).unwrap();
+        add_step(state(), task.id.clone(), "after".into(), Some("echo no".into())).unwrap();
+        run_task(handle.clone(), state(), task.id.clone()).unwrap();
+        let mut approved = false;
+        for _ in 0..300 {
+            let d = get_task(state(), task.id.clone()).unwrap();
+            if !approved && d.steps[0].status == "awaiting_approval" {
+                approve_step(state(), task.id.clone(), d.steps[0].id.clone(), true).unwrap();
+                approved = true;
+            }
+            if d.task.status == "failed" {
+                assert_eq!(d.steps[0].exit_code, Some(3));
+                assert!(d.steps[0].output.contains("boom"));
+                assert_eq!(d.steps[1].status, "pending", "later steps must not run after a failure");
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("task never failed");
     }
 }

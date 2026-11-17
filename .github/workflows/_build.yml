@@ -1,0 +1,184 @@
+# Reusable build: tests, builds and packages NEXUS on native macOS, Windows and Linux runners.
+# Called by ci.yml (main branch) and release.yml (version tags). It never publishes anything.
+name: Build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      retention-days:
+        type: number
+        default: 14
+      platforms:
+        description: Comma-separated subset of macos, windows, linux
+        type: string
+        default: macos,windows,linux
+    secrets:
+      APPLE_CERTIFICATE: { required: false }
+      APPLE_CERTIFICATE_PASSWORD: { required: false }
+      APPLE_SIGNING_IDENTITY: { required: false }
+      APPLE_ID: { required: false }
+      APPLE_PASSWORD: { required: false }
+      APPLE_TEAM_ID: { required: false }
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Choose platforms
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        env:
+          WANTED: ${{ inputs.platforms }}
+        run: |
+          node -e '
+            const all = [
+              { platform: "macos", name: "macOS (Apple Silicon)", os: "macos-latest", target: "aarch64-apple-darwin", native: true },
+              { platform: "macos", name: "macOS (Intel)", os: "macos-latest", target: "x86_64-apple-darwin", native: false },
+              { platform: "linux", name: "Linux (x64)", os: "ubuntu-22.04", target: "x86_64-unknown-linux-gnu", native: true },
+              { platform: "windows", name: "Windows (x64)", os: "windows-latest", target: "x86_64-pc-windows-msvc", native: true },
+            ];
+            const wanted = process.env.WANTED.split(",").map((s) => s.trim()).filter(Boolean);
+            const picked = all.filter((m) => wanted.includes(m.platform));
+            if (!picked.length) { console.error("No platforms selected"); process.exit(1); }
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, "matrix=" + JSON.stringify(picked) + "\n");
+            console.log(picked.map((m) => m.name).join(", "));
+          '
+
+  build:
+    name: ${{ matrix.name }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+            libdbus-1-dev libssl-dev pkg-config build-essential patchelf file rpm xvfb
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install Rust (version from rust-toolchain.toml)
+        shell: bash
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Rust formatting
+        if: matrix.native
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Frontend type-check
+        run: npm run typecheck
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Rust tests
+        if: matrix.native
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Build frontend
+        run: npm run build
+
+      # Signing happens only when the repository has the secrets; otherwise the build is unsigned.
+      - name: Configure macOS signing
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        run: |
+          {
+            echo "APPLE_CERTIFICATE=${{ secrets.APPLE_CERTIFICATE }}"
+            echo "APPLE_CERTIFICATE_PASSWORD=${{ secrets.APPLE_CERTIFICATE_PASSWORD }}"
+            echo "APPLE_SIGNING_IDENTITY=${{ secrets.APPLE_SIGNING_IDENTITY }}"
+            echo "APPLE_ID=${{ secrets.APPLE_ID }}"
+            echo "APPLE_PASSWORD=${{ secrets.APPLE_PASSWORD }}"
+            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and package installers
+        run: npm run tauri build -- --target ${{ matrix.target }}
+        env:
+          NEXUS_REPOSITORY: ${{ github.repository }}
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p installers
+          find "src-tauri/target/${{ matrix.target }}/release/bundle" -type f \
+            \( -name '*.dmg' -o -name '*-setup.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
+            -exec cp {} installers/ \;
+          ls -l installers
+          test -n "$(ls installers)"
+
+      # --- Automated launch and install checks. These start the real app; nobody looks at the window.
+      - name: Launch check (built binary)
+        if: matrix.native && runner.os != 'Linux'
+        shell: bash
+        run: node scripts/smoke-launch.mjs "src-tauri/target/${{ matrix.target }}/release/nexus${{ runner.os == 'Windows' && '.exe' || '' }}"
+
+      - name: Launch check (built binary, virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/smoke-launch.mjs src-tauri/target/${{ matrix.target }}/release/nexus
+
+      - name: Install check (.deb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y ./installers/*.deb
+          test -x /usr/bin/nexus
+          xvfb-run -a node scripts/smoke-launch.mjs /usr/bin/nexus
+          sudo apt-get remove -y nexus
+          test ! -e /usr/bin/nexus
+
+      - name: Install check (NSIS installer)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem installers -Filter *-setup.exe | Select-Object -First 1
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA","$env:ProgramFiles" -Recurse -Filter nexus.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notlike '*target*' } | Select-Object -First 1
+          if (-not $exe) { throw 'NEXUS was not installed' }
+          Write-Host "Installed at $($exe.FullName)"
+          node scripts/smoke-launch.mjs $exe.FullName
+          $uninstall = Join-Path $exe.DirectoryName 'uninstall.exe'
+          if (Test-Path $uninstall) { Start-Process -FilePath $uninstall -ArgumentList '/S' -Wait }
+
+      - name: Install check (.dmg)
+        if: runner.os == 'macOS' && matrix.native
+        run: |
+          hdiutil attach installers/*.dmg -nobrowse -mountpoint /tmp/nexus-dmg
+          cp -R /tmp/nexus-dmg/NEXUS.app "$RUNNER_TEMP/NEXUS.app"
+          hdiutil detach /tmp/nexus-dmg
+          node scripts/smoke-launch.mjs "$RUNNER_TEMP/NEXUS.app/Contents/MacOS/nexus"
+          codesign -dv "$RUNNER_TEMP/NEXUS.app" 2>&1 | head -5 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-${{ matrix.target }}
+          path: installers/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}

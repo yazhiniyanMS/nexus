@@ -11,7 +11,7 @@ monaco.editor.defineTheme("nexus", {
   base: "vs-dark",
   inherit: true,
   rules: [],
-  colors: { "editor.background": "#050506", "editorGutter.background": "#050506", "editor.lineHighlightBackground": "#101013" },
+  colors: { "editor.background": "#060607", "editorGutter.background": "#060607", "editor.lineHighlightBackground": "#101013" },
 });
 
 const byExtension: Record<string, string> = {

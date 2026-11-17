@@ -4,7 +4,7 @@ import type { Workspace } from "../App";
 import { Badge, Button, Card, Empty, ErrorBanner, PageHeader } from "../components/ui";
 import { api } from "../lib/api";
 import { importProject } from "../lib/importProject";
-import { errorText, formatNumber, timeAgo, useAsync } from "../lib/util";
+import { errorText, formatNumber, primaryLanguage, timeAgo, useAsync } from "../lib/util";
 
 function Stat({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
@@ -89,7 +89,7 @@ export default function Dashboard({ ws }: { ws: Workspace }) {
                       {!p.exists ? (
                         <Badge tone="red">missing</Badge>
                       ) : (
-                        p.analysis?.languages[0] && <Badge>{p.analysis.languages[0].name}</Badge>
+                        p.analysis?.languages.length ? <Badge>{primaryLanguage(p.analysis.languages)}</Badge> : null
                       )}
                     </button>
                   </li>

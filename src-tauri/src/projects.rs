@@ -1,7 +1,7 @@
 //! Project intelligence: import local repositories and analyse them without any AI.
 
 use crate::error::{AppError, Result};
-use crate::{activity, db, AppState};
+use crate::{activity, db, platform, AppState};
 use ignore::WalkBuilder;
 use regex::Regex;
 use rusqlite::{params, OptionalExtension};
@@ -14,8 +14,23 @@ use tauri::State;
 
 /// Directories that are never worth analysing or searching.
 const SKIP_DIRS: &[&str] = &[
-    ".git", "node_modules", "target", "dist", "build", ".next", ".nuxt", ".venv", "venv",
-    "__pycache__", ".idea", ".gradle", ".turbo", ".cache", "coverage", ".svelte-kit", "Pods",
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".idea",
+    ".gradle",
+    ".turbo",
+    ".cache",
+    "coverage",
+    ".svelte-kit",
+    "Pods",
 ];
 const MAX_FILES: usize = 60_000;
 const MAX_TEXT_BYTES: u64 = 1_500_000;
@@ -49,12 +64,7 @@ pub fn read_text(path: &Path) -> Option<String> {
 
 /// Display a path relative to the project root using forward slashes on every OS.
 pub fn rel(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
+    path.strip_prefix(root).unwrap_or(path).components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/")
 }
 
 fn language_for(path: &Path) -> Option<&'static str> {
@@ -169,12 +179,10 @@ fn secret_patterns() -> &'static [(Regex, &'static str)] {
     P.get_or_init(|| {
         vec![
             (Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(), "Possible AWS access key"),
+            (Regex::new(r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap(), "Private key material"),
             (
-                Regex::new(r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap(),
-                "Private key material",
-            ),
-            (
-                Regex::new(r#"(?i)(api[_-]?key|secret|passwd|password|auth[_-]?token)["']?\s*[:=]\s*["'][A-Za-z0-9_\-/+]{20,}["']"#).unwrap(),
+                Regex::new(r#"(?i)(api[_-]?key|secret|passwd|password|auth[_-]?token)["']?\s*[:=]\s*["'][A-Za-z0-9_\-/+]{20,}["']"#)
+                    .unwrap(),
                 "Possible hard-coded credential",
             ),
         ]
@@ -263,19 +271,10 @@ fn parse_pyproject(text: &str) -> Vec<Dependency> {
     if let Some(list) = v.get("project").and_then(|p| p.get("dependencies")).and_then(|d| d.as_array()) {
         out.extend(list.iter().filter_map(|x| x.as_str()).filter_map(split_requirement));
     }
-    if let Some(map) = v
-        .get("tool")
-        .and_then(|t| t.get("poetry"))
-        .and_then(|p| p.get("dependencies"))
-        .and_then(|d| d.as_table())
-    {
+    if let Some(map) = v.get("tool").and_then(|t| t.get("poetry")).and_then(|p| p.get("dependencies")).and_then(|d| d.as_table()) {
         for (name, spec) in map {
             if name != "python" {
-                out.push(Dependency {
-                    name: name.clone(),
-                    version: spec.as_str().unwrap_or("").to_string(),
-                    dev: false,
-                });
+                out.push(Dependency { name: name.clone(), version: spec.as_str().unwrap_or("").to_string(), dev: false });
             }
         }
     }
@@ -295,7 +294,13 @@ fn parse_go_mod(text: &str) -> Vec<Dependency> {
             in_block = false;
             continue;
         }
-        let body = if in_block { line } else if let Some(r) = line.strip_prefix("require ") { r } else { continue };
+        let body = if in_block {
+            line
+        } else if let Some(r) = line.strip_prefix("require ") {
+            r
+        } else {
+            continue;
+        };
         let mut parts = body.split_whitespace();
         if let (Some(name), Some(ver)) = (parts.next(), parts.next()) {
             out.push(Dependency { name: name.into(), version: ver.into(), dev: body.contains("// indirect") });
@@ -306,15 +311,36 @@ fn parse_go_mod(text: &str) -> Vec<Dependency> {
 
 /// Map well-known dependency names to the framework/tool they indicate.
 const FRAMEWORK_HINTS: &[(&str, &str)] = &[
-    ("next", "Next.js"), ("react", "React"), ("vue", "Vue"), ("svelte", "Svelte"),
-    ("@angular/core", "Angular"), ("express", "Express"), ("fastify", "Fastify"),
-    ("@nestjs/core", "NestJS"), ("vite", "Vite"), ("tailwindcss", "Tailwind CSS"),
-    ("electron", "Electron"), ("@tauri-apps/api", "Tauri"), ("tauri", "Tauri"),
-    ("typescript", "TypeScript"), ("jest", "Jest"), ("vitest", "Vitest"),
-    ("axum", "Axum"), ("actix-web", "Actix Web"), ("tokio", "Tokio"), ("bevy", "Bevy"),
-    ("django", "Django"), ("flask", "Flask"), ("fastapi", "FastAPI"), ("torch", "PyTorch"),
-    ("tensorflow", "TensorFlow"), ("pandas", "pandas"), ("pytest", "pytest"),
-    ("github.com/gin-gonic/gin", "Gin"), ("rails", "Rails"), ("prisma", "Prisma"),
+    ("next", "Next.js"),
+    ("react", "React"),
+    ("vue", "Vue"),
+    ("svelte", "Svelte"),
+    ("@angular/core", "Angular"),
+    ("express", "Express"),
+    ("fastify", "Fastify"),
+    ("@nestjs/core", "NestJS"),
+    ("vite", "Vite"),
+    ("tailwindcss", "Tailwind CSS"),
+    ("electron", "Electron"),
+    ("@tauri-apps/api", "Tauri"),
+    ("tauri", "Tauri"),
+    ("typescript", "TypeScript"),
+    ("jest", "Jest"),
+    ("vitest", "Vitest"),
+    ("axum", "Axum"),
+    ("actix-web", "Actix Web"),
+    ("tokio", "Tokio"),
+    ("bevy", "Bevy"),
+    ("django", "Django"),
+    ("flask", "Flask"),
+    ("fastapi", "FastAPI"),
+    ("torch", "PyTorch"),
+    ("tensorflow", "TensorFlow"),
+    ("pandas", "pandas"),
+    ("pytest", "pytest"),
+    ("github.com/gin-gonic/gin", "Gin"),
+    ("rails", "Rails"),
+    ("prisma", "Prisma"),
 ];
 
 pub fn analyze(root: &Path) -> Analysis {
@@ -346,14 +372,24 @@ pub fn analyze(root: &Path) -> Analysis {
         let top = if depth == 0 { "(root)".to_string() } else { relp.split('/').next().unwrap_or("").to_string() };
         *dirs.entry(top).or_insert(0) += 1;
 
-        if depth == 0 && lower.starts_with("readme") { has_readme = true; }
-        if depth == 0 && (lower.starts_with("license") || lower.starts_with("copying")) { has_license = true; }
-        if relp.starts_with(".github/workflows/") || lower == ".gitlab-ci.yml" { has_ci = true; }
-        if relp.contains("test") || relp.contains("spec") { has_tests = true; }
+        if depth == 0 && lower.starts_with("readme") {
+            has_readme = true;
+        }
+        if depth == 0 && (lower.starts_with("license") || lower.starts_with("copying")) {
+            has_license = true;
+        }
+        if relp.starts_with(".github/workflows/") || lower == ".gitlab-ci.yml" {
+            has_ci = true;
+        }
+        if relp.contains("test") || relp.contains("spec") {
+            has_tests = true;
+        }
         if lower == ".env" || (lower.starts_with(".env.") && !lower.ends_with(".example") && !lower.ends_with(".sample")) {
             sink.push("high", "env-file", "Environment file is not git-ignored; it may contain secrets".into(), Some(relp.clone()), None);
         }
-        if lower == "dockerfile" || lower.starts_with("docker-compose") { frameworks.insert("Docker".into()); }
+        if lower == "dockerfile" || lower.starts_with("docker-compose") {
+            frameworks.insert("Docker".into());
+        }
 
         let lang = language_for(path);
         let text = if lang.is_some() || depth <= 3 { read_text(path) } else { None };
@@ -416,11 +452,21 @@ pub fn analyze(root: &Path) -> Analysis {
         }
     }
 
-    if !has_readme { sink.push("medium", "missing-readme", "No README found at the project root".into(), None, None); }
-    if !has_license { sink.push("low", "missing-license", "No LICENSE file found at the project root".into(), None, None); }
-    if !has_tests && a.file_count > 0 { sink.push("medium", "missing-tests", "No test files or directories detected".into(), None, None); }
-    if !has_ci && a.file_count > 0 { sink.push("low", "missing-ci", "No CI configuration detected".into(), None, None); }
-    if has_ci { frameworks.insert("CI".into()); }
+    if !has_readme {
+        sink.push("medium", "missing-readme", "No README found at the project root".into(), None, None);
+    }
+    if !has_license {
+        sink.push("low", "missing-license", "No LICENSE file found at the project root".into(), None, None);
+    }
+    if !has_tests && a.file_count > 0 {
+        sink.push("medium", "missing-tests", "No test files or directories detected".into(), None, None);
+    }
+    if !has_ci && a.file_count > 0 {
+        sink.push("low", "missing-ci", "No CI configuration detected".into(), None, None);
+    }
+    if has_ci {
+        frameworks.insert("CI".into());
+    }
     for (kind, n) in &sink.counts {
         if *n > MAX_ISSUES_PER_KIND {
             sink.issues.push(Issue {
@@ -432,7 +478,12 @@ pub fn analyze(root: &Path) -> Analysis {
             });
         }
     }
-    let rank = |s: &str| match s { "high" => 0, "medium" => 1, "low" => 2, _ => 3 };
+    let rank = |s: &str| match s {
+        "high" => 0,
+        "medium" => 1,
+        "low" => 2,
+        _ => 3,
+    };
     sink.issues.sort_by_key(|i| rank(&i.severity));
 
     let mut languages: Vec<LanguageStat> = langs.into_values().collect();
@@ -464,12 +515,7 @@ fn summarize(root: &Path, a: &Analysis) -> String {
     if !fw.is_empty() {
         s.push_str(&format!(" using {}", fw.join(", ")));
     }
-    s.push_str(&format!(
-        ". It has {} files and about {} lines across {} languages.",
-        a.file_count,
-        a.total_lines,
-        a.languages.len()
-    ));
+    s.push_str(&format!(". It has {} files and about {} lines across {} languages.", a.file_count, a.total_lines, a.languages.len()));
     let dep_count: usize = a.dependencies.iter().map(|g| g.deps.len()).sum();
     if dep_count > 0 {
         s.push_str(&format!(" {} dependencies are declared in {} manifest(s).", dep_count, a.dependencies.len()));
@@ -525,11 +571,7 @@ pub fn all_projects(conn: &rusqlite::Connection) -> Result<Vec<Project>> {
 
 /// Resolve a project's root directory from its id.
 pub fn project_root(state: &AppState, id: &str) -> Result<PathBuf> {
-    let path: Option<String> = state
-        .db
-        .conn()
-        .query_row("SELECT path FROM projects WHERE id = ?1", [id], |r| r.get(0))
-        .optional()?;
+    let path: Option<String> = state.db.conn().query_row("SELECT path FROM projects WHERE id = ?1", [id], |r| r.get(0)).optional()?;
     let path = PathBuf::from(path.ok_or("Project not found")?);
     if !path.is_dir() {
         return Err(AppError::Msg(format!("Project folder no longer exists: {}", path.display())));
@@ -538,9 +580,9 @@ pub fn project_root(state: &AppState, id: &str) -> Result<PathBuf> {
 }
 
 /// Resolve a user-supplied relative path, refusing anything that escapes the project root.
-fn resolve_inside(root: &Path, relative: &str) -> Result<PathBuf> {
-    let root = root.canonicalize()?;
-    let full = root.join(relative).canonicalize()?;
+pub(crate) fn resolve_inside(root: &Path, relative: &str) -> Result<PathBuf> {
+    let root = platform::paths::canonical(root)?;
+    let full = platform::paths::canonical(&root.join(relative))?;
     if !full.starts_with(&root) {
         return Err("Path is outside the project".into());
     }
@@ -558,23 +600,18 @@ pub async fn add_project(state: State<'_, AppState>, path: String) -> Result<Pro
     if !dir.is_dir() {
         return Err("That path is not a folder".into());
     }
-    let dir = dir.canonicalize()?;
-    // Strip the Windows verbatim prefix so paths stay readable and usable by git.
-    let path_str = dir.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+    // One spelling on every system (no Windows verbatim prefix), so paths stay usable by Git.
+    let dir = platform::paths::canonical(&dir)?;
+    let path_str = dir.to_string_lossy().into_owned();
     let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path_str.clone());
     let id = db::new_id();
     {
         let conn = state.db.conn();
-        let exists: Option<String> = conn
-            .query_row("SELECT id FROM projects WHERE path = ?1", [&path_str], |r| r.get(0))
-            .optional()?;
+        let exists: Option<String> = conn.query_row("SELECT id FROM projects WHERE path = ?1", [&path_str], |r| r.get(0)).optional()?;
         if exists.is_some() {
             return Err("This folder is already imported".into());
         }
-        conn.execute(
-            "INSERT INTO projects (id, name, path, added_at) VALUES (?1, ?2, ?3, ?4)",
-            params![id, name, path_str, db::now()],
-        )?;
+        conn.execute("INSERT INTO projects (id, name, path, added_at) VALUES (?1, ?2, ?3, ?4)", params![id, name, path_str, db::now()])?;
         activity::log(&conn, "project", &format!("Imported project {name}"), Some(&id));
     }
     analyze_project(state, id).await
@@ -594,20 +631,14 @@ pub fn remove_project(state: State<'_, AppState>, id: String) -> Result<()> {
 #[tauri::command]
 pub async fn analyze_project(state: State<'_, AppState>, id: String) -> Result<Project> {
     let root = project_root(&state, &id)?;
-    let analysis = tauri::async_runtime::spawn_blocking(move || analyze(&root))
-        .await
-        .map_err(|e| AppError::Msg(format!("Analysis failed: {e}")))?;
+    let analysis =
+        tauri::async_runtime::spawn_blocking(move || analyze(&root)).await.map_err(|e| AppError::Msg(format!("Analysis failed: {e}")))?;
     let conn = state.db.conn();
     conn.execute(
         "UPDATE projects SET analysis = ?1, analyzed_at = ?2 WHERE id = ?3",
         params![serde_json::to_string(&analysis)?, db::now(), id],
     )?;
-    activity::log(
-        &conn,
-        "analysis",
-        &format!("Analysed {} files, {} findings", analysis.file_count, analysis.issues.len()),
-        Some(&id),
-    );
+    activity::log(&conn, "analysis", &format!("Analysed {} files, {} findings", analysis.file_count, analysis.issues.len()), Some(&id));
     Ok(conn.query_row(&format!("SELECT {PROJECT_COLS} FROM projects WHERE id = ?1"), [&id], row_to_project)?)
 }
 
@@ -621,7 +652,7 @@ pub struct DirEntry {
 
 #[tauri::command]
 pub fn list_dir(state: State<'_, AppState>, project_id: String, path: String) -> Result<Vec<DirEntry>> {
-    let root = project_root(&state, &project_id)?.canonicalize()?;
+    let root = platform::paths::canonical(&project_root(&state, &project_id)?)?;
     let dir = resolve_inside(&root, &path)?;
     let mut out = vec![];
     for entry in fs::read_dir(dir)?.flatten() {
@@ -636,14 +667,62 @@ pub fn list_dir(state: State<'_, AppState>, project_id: String, path: String) ->
     Ok(out)
 }
 
-#[tauri::command]
-pub fn read_file(state: State<'_, AppState>, project_id: String, path: String) -> Result<String> {
-    let root = project_root(&state, &project_id)?;
-    let file = resolve_inside(&root, &path)?;
-    if !file.is_file() {
-        return Err("Not a file".into());
+/// How much of a large file is shown before the preview is cut off.
+const PREVIEW_BYTES: u64 = 512 * 1024;
+
+#[derive(Serialize, Debug)]
+pub struct FilePreview {
+    pub content: String,
+    pub size: u64,
+    /// True when only the beginning of the file is included.
+    pub truncated: bool,
+}
+
+fn human_size(n: u64) -> String {
+    match n {
+        0..=1023 => format!("{n} bytes"),
+        1024..=1_048_575 => format!("{:.1} KB", n as f64 / 1024.0),
+        _ => format!("{:.1} MB", n as f64 / 1_048_576.0),
     }
-    read_text(&file).ok_or_else(|| AppError::Msg("File is binary or too large to preview".into()))
+}
+
+/// Read the start of a file for display. Large files are cut at a line boundary; binary files are refused.
+pub fn preview_file(file: &Path) -> Result<FilePreview> {
+    use std::io::Read;
+    let size = fs::metadata(file)?.len();
+    let mut bytes = Vec::new();
+    fs::File::open(file)?.take(PREVIEW_BYTES).read_to_end(&mut bytes)?;
+    if bytes.iter().take(8000).any(|b| *b == 0) {
+        return Err(AppError::Msg(format!("This is a binary file ({}), so it cannot be shown as text.", human_size(size))));
+    }
+    let truncated = size > bytes.len() as u64;
+    if truncated {
+        // Drop the partial last line (and any split multi-byte character with it).
+        if let Some(pos) = bytes.iter().rposition(|b| *b == b'\n') {
+            bytes.truncate(pos + 1);
+        }
+    }
+    Ok(FilePreview { content: String::from_utf8_lossy(&bytes).into_owned(), size, truncated })
+}
+
+#[tauri::command]
+pub fn read_file(state: State<'_, AppState>, project_id: String, path: String) -> Result<FilePreview> {
+    let root = project_root(&state, &project_id)?;
+    let file = resolve_inside(&root, &path).map_err(|e| match e {
+        AppError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound => {
+            AppError::Msg(format!("{path} no longer exists. It may have been moved or deleted."))
+        }
+        other => other,
+    })?;
+    if !file.is_file() {
+        return Err("This is a folder, not a file.".into());
+    }
+    preview_file(&file).map_err(|e| match e {
+        AppError::Io(ref io) if io.kind() == std::io::ErrorKind::PermissionDenied => {
+            AppError::Msg(format!("NEXUS does not have permission to read {path}."))
+        }
+        other => other,
+    })
 }
 
 #[cfg(test)]
@@ -695,6 +774,25 @@ pub mod tests {
         let dir = temp_project(&[("a.txt", "x")]);
         assert!(resolve_inside(&dir, "a.txt").is_ok());
         assert!(resolve_inside(&dir, "../").is_err());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn previews_text_truncates_large_and_refuses_binary() {
+        let big = "line of text\n".repeat(60_000); // ~780 KB
+        let dir = temp_project(&[("small.rs", "fn main() {}\n"), ("big.log", &big)]);
+        fs::write(dir.join("image.bin"), [0x89u8, b'P', b'N', b'G', 0, 0, 1, 2]).unwrap();
+
+        let small = preview_file(&dir.join("small.rs")).unwrap();
+        assert_eq!((small.content.as_str(), small.truncated), ("fn main() {}\n", false));
+
+        let large = preview_file(&dir.join("big.log")).unwrap();
+        assert!(large.truncated);
+        assert_eq!(large.size, big.len() as u64);
+        assert!(large.content.len() as u64 <= PREVIEW_BYTES && large.content.ends_with("line of text\n"));
+
+        let err = preview_file(&dir.join("image.bin")).unwrap_err().to_string();
+        assert!(err.contains("binary file"), "{err}");
         fs::remove_dir_all(&dir).unwrap();
     }
 }

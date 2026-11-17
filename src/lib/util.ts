@@ -24,11 +24,14 @@ export function timeAgo(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString();
 }
 
-/** Stable colour per label, used for language bars. */
-export function colorFor(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 360;
-  return `hsl(${h} 60% 58%)`;
+/** Distinct colour per position in a list (golden-angle hue steps never collide for neighbours). */
+export const colorAt = (index: number) => `hsl(${(150 + index * 137.5) % 360} 60% 58%)`;
+
+const MARKUP = new Set(["Markdown", "JSON", "YAML", "TOML", "XML", "HTML", "CSS", "Sass/Less"]);
+
+/** The main programming language, ignoring data and markup formats when real code exists. */
+export function primaryLanguage(languages: { name: string }[]): string | undefined {
+  return (languages.find((l) => !MARKUP.has(l.name)) ?? languages[0])?.name;
 }
 
 export const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));

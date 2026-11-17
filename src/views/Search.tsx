@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Search as SearchIcon } from "lucide-react";
+import { File as FileIcon, Search as SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Workspace } from "../App";
 import { FilePreview } from "../components/FilePreview";
@@ -55,7 +55,7 @@ export default function SearchView({ ws }: { ws: Workspace }) {
 
   return (
     <>
-      <PageHeader title="Search" subtitle="Find text across every imported project" />
+      <PageHeader title="Search" subtitle="Find files and text across every imported project" />
       <form
         className="flex shrink-0 items-center gap-2 border-b border-line p-3"
         onSubmit={(e) => {
@@ -63,10 +63,10 @@ export default function SearchView({ ws }: { ws: Workspace }) {
           void run();
         }}
       >
-        <Input autoFocus placeholder="Search for text or a pattern…" value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 font-mono" />
+        <Input autoFocus placeholder="Search file names and contents…" value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 font-mono" />
         <Toggle on={caseSensitive} onClick={() => setCaseSensitive(!caseSensitive)} title="Match case">Aa</Toggle>
         <Toggle on={regex} onClick={() => setRegex(!regex)} title="Regular expression">.*</Toggle>
-        <Select className="w-48" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
+        <Select className="w-48!" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
           <option value="all">All projects</option>
           {ws.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </Select>
@@ -81,8 +81,9 @@ export default function SearchView({ ws }: { ws: Workspace }) {
         <div className="flex min-h-0 flex-1">
           <div className={clsx("overflow-auto", open ? "w-[45%] shrink-0 border-r border-line" : "flex-1")}>
             <div className="px-4 py-2 text-xs text-dim">
-              {result.matches.length} matches in {groups.length} files · {result.files_scanned} files scanned
+              {result.matches.filter((m) => m.kind === "content").length} matching lines and {result.matches.filter((m) => m.kind === "file").length} file names in {groups.length} files · {result.files_scanned} files scanned
               {result.truncated && " · showing the first 500 matches"}
+              {result.files_skipped > 0 && ` · ${result.files_skipped} very large files skipped`}
             </div>
             {groups.map((g) => (
               <div key={g[0].project_id + g[0].path} className="border-t border-line">
@@ -92,12 +93,21 @@ export default function SearchView({ ws }: { ws: Workspace }) {
                 </div>
                 {g.map((m) => (
                   <button
-                    key={m.line}
+                    key={m.kind + m.line}
                     onClick={() => setOpen(m)}
                     className={clsx("flex w-full gap-3 px-4 py-1 text-left font-mono text-xs hover:bg-raised", open === m && "bg-raised")}
                   >
-                    <span className="w-10 shrink-0 text-right text-faint tabular-nums">{m.line}</span>
-                    <span className="truncate text-dim">{m.text}</span>
+                    {m.kind === "file" ? (
+                      <>
+                        <span className="flex w-10 shrink-0 justify-end text-accent"><FileIcon size={12} /></span>
+                        <span className="font-sans text-accent">File name matches</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-10 shrink-0 text-right text-faint tabular-nums">{m.line}</span>
+                        <span className="truncate text-dim">{m.text}</span>
+                      </>
+                    )}
                   </button>
                 ))}
               </div>
@@ -105,7 +115,7 @@ export default function SearchView({ ws }: { ws: Workspace }) {
           </div>
           {open && (
             <div className="min-w-0 flex-1">
-              <FilePreview projectId={open.project_id} path={open.path} line={open.line} />
+              <FilePreview projectId={open.project_id} path={open.path} line={open.line || undefined} />
             </div>
           )}
         </div>

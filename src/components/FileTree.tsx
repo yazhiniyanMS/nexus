@@ -26,7 +26,7 @@ function Node({ projectId, entry, depth, selected, onOpen }: {
         )}
       >
         {entry.is_dir ? (open ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span className="w-[13px]" />}
-        {entry.is_dir ? <Folder size={13} className="text-sky-400/80" /> : <File size={13} className="text-faint" />}
+        {entry.is_dir ? <Folder size={13} className="text-lav/80" /> : <File size={13} className="text-faint" />}
         <span className="truncate">{entry.name}</span>
       </button>
       {open && children?.map((c) => (

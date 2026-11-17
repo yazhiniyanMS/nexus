@@ -7,7 +7,7 @@ import { FileTree } from "../components/FileTree";
 import { Badge, Button, Card, Empty, ErrorBanner, PageHeader, Tabs } from "../components/ui";
 import { api, type Analysis, type Issue, type Project } from "../lib/api";
 import { confirmAction, importProject } from "../lib/importProject";
-import { colorFor, errorText, formatBytes, formatNumber, timeAgo } from "../lib/util";
+import { colorAt, errorText, formatBytes, formatNumber, primaryLanguage, timeAgo } from "../lib/util";
 
 type Tab = "overview" | "dependencies" | "findings" | "files";
 const severityTone = { high: "red", medium: "amber", low: "blue", info: "neutral" } as const;
@@ -37,14 +37,14 @@ function Overview({ a }: { a: Analysis }) {
         <Card className="p-4">
           <div className="mb-3 text-xs font-medium text-dim">Languages</div>
           <div className="mb-3 flex h-2 overflow-hidden rounded-full bg-raised">
-            {a.languages.map((l) => (
-              <div key={l.name} title={l.name} style={{ width: `${(l.lines / total) * 100}%`, background: colorFor(l.name) }} />
+            {a.languages.map((l, i) => (
+              <div key={l.name} title={l.name} style={{ width: `${(l.lines / total) * 100}%`, background: colorAt(i) }} />
             ))}
           </div>
           <ul className="space-y-1.5">
-            {a.languages.slice(0, 12).map((l) => (
+            {a.languages.slice(0, 12).map((l, i) => (
               <li key={l.name} className="flex items-center gap-2 text-[13px]">
-                <span className="size-2 rounded-full" style={{ background: colorFor(l.name) }} />
+                <span className="size-2 rounded-full" style={{ background: colorAt(i) }} />
                 <span className="flex-1">{l.name}</span>
                 <span className="text-xs text-faint tabular-nums">{formatNumber(l.files)} files</span>
                 <span className="w-24 text-right text-xs text-dim tabular-nums">{formatNumber(l.lines)} lines</span>
@@ -105,7 +105,7 @@ function Findings({ issues, onOpen }: { issues: Issue[]; onOpen: (path: string, 
           <div className="min-w-0 flex-1">
             <div className="selectable text-[13px] break-words">{i.message}</div>
             {i.file && (
-              <button className="mt-0.5 font-mono text-xs text-sky-300 hover:underline" onClick={() => onOpen(i.file!, i.line ?? undefined)}>
+              <button className="mt-0.5 font-mono text-xs text-lav hover:underline" onClick={() => onOpen(i.file!, i.line ?? undefined)}>
                 {i.file}{i.line ? `:${i.line}` : ""}
               </button>
             )}
@@ -238,7 +238,7 @@ export default function ProjectsView({ ws }: { ws: Workspace }) {
             >
               <div className="truncate text-[13px] font-medium">{p.name}</div>
               <div className="truncate text-xs text-faint">
-                {!p.exists ? "folder missing" : p.analysis ? `${formatNumber(p.analysis.file_count)} files · ${p.analysis.languages[0]?.name ?? "no code"}` : "not analysed"}
+                {!p.exists ? "folder missing" : p.analysis ? `${formatNumber(p.analysis.file_count)} files · ${primaryLanguage(p.analysis.languages) ?? "no code"}` : "not analysed"}
               </div>
             </button>
           ))}

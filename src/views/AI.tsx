@@ -1,147 +1,19 @@
 import clsx from "clsx";
-import { Bot, Check, KeyRound, Plus, Send, Trash2 } from "lucide-react";
+import { Bot, Check, Plus, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Workspace } from "../App";
-import { Badge, Button, Card, Empty, ErrorBanner, Field, Input, PageHeader, Select, Spinner, Tabs } from "../components/ui";
-import { api, type ChatMessage, type ModelInfo, type Provider, type ProviderInput, type ProviderKind } from "../lib/api";
-import { confirmAction } from "../lib/importProject";
+import { ProviderManager } from "../components/ProviderManager";
+import { Badge, Button, Card, Empty, ErrorBanner, Input, PageHeader, Select, Spinner, Tabs } from "../components/ui";
+import { api, type ChatMessage, type ModelInfo, type Provider } from "../lib/api";
+import { hostOf } from "../lib/lab";
 import { errorText, formatBytes, formatNumber, useAsync } from "../lib/util";
 
 type Tab = "chat" | "providers" | "local" | "usage";
 
-const PRESETS: { label: string; kind: ProviderKind; base_url: string; needsKey: boolean }[] = [
-  { label: "Anthropic", kind: "anthropic", base_url: "https://api.anthropic.com", needsKey: true },
-  { label: "OpenAI", kind: "openai", base_url: "https://api.openai.com/v1", needsKey: true },
-  { label: "Ollama (local)", kind: "ollama", base_url: "http://localhost:11434", needsKey: false },
-  { label: "LM Studio (local)", kind: "openai", base_url: "http://localhost:1234/v1", needsKey: false },
-  { label: "Other OpenAI-compatible", kind: "openai", base_url: "https://", needsKey: false },
-];
-
-function ProviderForm({ initial, onSaved, onCancel }: { initial?: Provider; onSaved: () => void; onCancel: () => void }) {
-  const [form, setForm] = useState<ProviderInput>(
-    initial
-      ? { id: initial.id, name: initial.name, kind: initial.kind, base_url: initial.base_url, default_model: initial.default_model ?? "" }
-      : { name: PRESETS[0].label, kind: PRESETS[0].kind, base_url: PRESETS[0].base_url, default_model: "" },
-  );
-  const [key, setKey] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const set = (patch: Partial<ProviderInput>) => setForm((f) => ({ ...f, ...patch }));
-
-  return (
-    <Card className="p-4">
-      <form
-        className="space-y-3"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError(undefined);
-          try {
-            // Only send the key when the user typed one, so editing never wipes a stored key.
-            await api.saveProvider({ ...form, ...(key ? { api_key: key } : {}) });
-            onSaved();
-          } catch (err) {
-            setError(errorText(err));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <ErrorBanner message={error} />
-        {!initial && (
-          <Field label="Type">
-            <Select
-              onChange={(e) => {
-                const p = PRESETS[Number(e.target.value)];
-                set({ name: p.label.replace(" (local)", ""), kind: p.kind, base_url: p.base_url });
-              }}
-            >
-              {PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
-            </Select>
-          </Field>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Name"><Input value={form.name} onChange={(e) => set({ name: e.target.value })} /></Field>
-          <Field label="Default model" hint="Optional. You can also pick one per chat."><Input className="font-mono" value={form.default_model ?? ""} onChange={(e) => set({ default_model: e.target.value })} /></Field>
-        </div>
-        <Field label="Base URL"><Input className="font-mono" value={form.base_url} onChange={(e) => set({ base_url: e.target.value })} /></Field>
-        <Field
-          label="API key"
-          hint={`Stored in your operating system's keychain, never in the NEXUS database.${initial?.has_key ? " Leave blank to keep the current key." : ""}`}
-        >
-          <Input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder={initial?.has_key ? "••••••••  (saved)" : form.kind === "ollama" ? "Not needed for local models" : ""} />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" variant="primary" busy={busy}>Save provider</Button>
-        </div>
-      </form>
-    </Card>
-  );
-}
-
 function Providers({ providers, reload }: { providers: Provider[]; reload: () => void }) {
-  const [editing, setEditing] = useState<Provider | "new" | null>(null);
-  const [test, setTest] = useState<Record<string, { ok: boolean; text: string } | "busy">>({});
-
-  const runTest = async (p: Provider) => {
-    setTest((t) => ({ ...t, [p.id]: "busy" }));
-    try {
-      const models = await api.listModels(p.id);
-      setTest((t) => ({ ...t, [p.id]: { ok: true, text: `Connected · ${models.length} models available` } }));
-    } catch (e) {
-      setTest((t) => ({ ...t, [p.id]: { ok: false, text: errorText(e) } }));
-    }
-  };
-
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-3 p-5">
-      <p className="text-[13px] leading-relaxed text-dim">
-        Providers are optional. Project analysis, search, Git and tasks all work without one. Requests go directly from this machine to the URL you configure.
-      </p>
-      {providers.map((p) =>
-        editing !== "new" && editing?.id === p.id ? (
-          <ProviderForm key={p.id} initial={p} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />
-        ) : (
-          <Card key={p.id} className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-semibold">{p.name}</span>
-                  <Badge>{p.kind === "openai" ? "OpenAI-compatible" : p.kind}</Badge>
-                  {p.has_key && <Badge tone="green"><KeyRound size={10} className="mr-1" />key in keychain</Badge>}
-                </div>
-                <div className="selectable mt-0.5 truncate font-mono text-xs text-faint">{p.base_url}{p.default_model ? ` · ${p.default_model}` : ""}</div>
-              </div>
-              <Button size="sm" busy={test[p.id] === "busy"} onClick={() => runTest(p)}>Test</Button>
-              <Button size="sm" onClick={() => setEditing(p)}>Edit</Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                title="Delete provider"
-                onClick={async () => {
-                  if (await confirmAction(`Delete the provider “${p.name}” and its stored API key?`)) {
-                    await api.deleteProvider(p.id);
-                    reload();
-                  }
-                }}
-              >
-                <Trash2 size={13} />
-              </Button>
-            </div>
-            {test[p.id] && test[p.id] !== "busy" && (
-              <div className={clsx("selectable mt-2 text-xs", (test[p.id] as { ok: boolean }).ok ? "text-emerald-300" : "text-red-300")}>
-                {(test[p.id] as { text: string }).text}
-              </div>
-            )}
-          </Card>
-        ),
-      )}
-      {editing === "new" ? (
-        <ProviderForm onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />
-      ) : (
-        <Button onClick={() => setEditing("new")}><Plus size={13} /> Add provider</Button>
-      )}
+    <div className="mx-auto w-full max-w-3xl p-5">
+      <ProviderManager providers={providers} reload={reload} intro="Providers are optional. Project analysis, search, Git and tasks all work without one. Requests go directly from this machine to the URL you configure. Model Lab has the full set of model tools." />
     </div>
   );
 }
@@ -187,7 +59,7 @@ function LocalModels({ providers, reload }: { providers: Provider[]; reload: () 
               <span className="font-mono text-xs text-faint">{r.base_url}</span>
               <div className="ml-auto">
                 {r.running && (added ? (
-                  <span className="flex items-center gap-1 text-xs text-emerald-300"><Check size={12} /> added as provider</span>
+                  <span className="flex items-center gap-1 text-xs text-accent"><Check size={12} /> added as provider</span>
                 ) : (
                   <Button size="sm" onClick={async () => { await api.saveProvider({ name: r.name, kind: r.kind, base_url: r.base_url, default_model: r.models[0]?.id }); reload(); }}>
                     <Plus size={12} /> Use as provider
@@ -232,10 +104,18 @@ function Usage() {
 
 type Turn = ChatMessage & { meta?: string };
 
-function Chat({ ws, providers, goProviders }: { ws: Workspace; providers: Provider[]; goProviders: () => void }) {
+function Chat({ ws, providers: allProviders, goProviders }: { ws: Workspace; providers: Provider[]; goProviders: () => void }) {
+  const providers = allProviders.filter((p) => p.enabled);
+  const defaults = useAsync(api.labSettings, []);
   const [providerId, setProviderId] = useState(providers[0]?.id ?? "");
   const provider = providers.find((p) => p.id === providerId) ?? providers[0];
   const [model, setModel] = useState("");
+  // Start on the Model Lab default connection when there is one.
+  const defaultProvider = defaults.data?.default_provider_id;
+  useEffect(() => {
+    if (defaultProvider && providers.some((p) => p.id === defaultProvider)) setProviderId(defaultProvider);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultProvider]);
   const [useProject, setUseProject] = useState(true);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
@@ -245,7 +125,10 @@ function Chat({ ws, providers, goProviders }: { ws: Workspace; providers: Provid
   const models = useAsync(() => (provider ? api.listModels(provider.id) : Promise.resolve([])), [provider?.id]);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setModel(provider?.default_model ?? ""), [provider?.id, provider?.default_model]);
+  useEffect(() => {
+    const fromLab = provider && provider.id === defaults.data?.default_provider_id ? defaults.data?.default_model : null;
+    setModel(fromLab ?? provider?.default_model ?? "");
+  }, [provider?.id, provider?.default_model, defaults.data?.default_provider_id, defaults.data?.default_model]);
   useEffect(() => end.current?.scrollIntoView({ block: "end" }), [turns, busy]);
   useEffect(() => {
     if (!busy) return;
@@ -289,17 +172,20 @@ function Chat({ ws, providers, goProviders }: { ws: Workspace; providers: Provid
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2">
-        <Select className="w-44" value={provider.id} onChange={(e) => setProviderId(e.target.value)} aria-label="Provider">
-          {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <Select className="w-44!" value={provider.id} onChange={(e) => setProviderId(e.target.value)} aria-label="Provider">
+          {providers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.local ? "" : " (remote)"}</option>)}
         </Select>
-        <Input className="w-64 font-mono" list="nexus-models" placeholder={models.loading ? "Loading models…" : "Model"} value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model" />
+        <Input className="w-64! font-mono" list="nexus-models" placeholder={models.loading ? "Loading models…" : "Model"} value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model" />
         <datalist id="nexus-models">{models.data?.map((m) => <option key={m.id} value={m.id} />)}</datalist>
         {ws.project && (
           <label className="ml-2 flex items-center gap-1.5 text-xs text-dim">
-            <input type="checkbox" checked={useProject} onChange={(e) => setUseProject(e.target.checked)} className="accent-emerald-400" />
+            <input type="checkbox" checked={useProject} onChange={(e) => setUseProject(e.target.checked)} className="accent-accent" />
             Include summary of {ws.project.name}
           </label>
         )}
+        <span data-testid="chat-destination" className={clsx("text-[11px]", provider.local ? "text-faint" : "text-warn")}>
+          {provider.local ? "runs on this machine" : `messages are sent to ${hostOf(provider.base_url)}`}
+        </span>
         {turns.length > 0 && <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setTurns([])}>Clear chat</Button>}
       </div>
       <div className="flex-1 overflow-auto">
@@ -332,7 +218,7 @@ function Chat({ ws, providers, goProviders }: { ws: Workspace; providers: Provid
             }}
             rows={2}
             placeholder="Message…  (Enter to send, Shift+Enter for a new line)"
-            className="flex-1 resize-none rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-accent/60 focus:outline-none"
+            className="flex-1 resize-none rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
           />
           <Button type="submit" variant="primary" disabled={!draft.trim() || busy}><Send size={13} /> Send</Button>
         </div>

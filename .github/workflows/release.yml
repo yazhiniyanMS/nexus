@@ -1,0 +1,62 @@
+# Tagged release: pushing a tag like v0.1.0 builds every installer, writes checksums and a
+# manifest, and creates a DRAFT GitHub release. A person must review and publish the draft;
+# nothing becomes public automatically.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: node scripts/check-version.mjs "${{ github.ref_name }}"
+      - name: Release notes exist
+        run: test -f "docs/releases/${{ github.ref_name }}.md"
+
+  build:
+    needs: verify
+    uses: ./.github/workflows/_build.yml
+    with:
+      retention-days: 30
+    secrets: inherit
+
+  draft:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          merge-multiple: true
+      - name: Checksums and manifest
+        env:
+          SIGNED: ${{ secrets.APPLE_CERTIFICATE != '' && 'macos' || '' }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/release-manifest.mjs dist-release --version "$VERSION" --commit "$GITHUB_SHA" --signed "$SIGNED"
+          cat dist-release/SHA256SUMS.txt
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist-release/* \
+            --draft --prerelease \
+            --title "NEXUS ${GITHUB_REF_NAME#v} (public beta)" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md"

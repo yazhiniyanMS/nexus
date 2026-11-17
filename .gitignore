@@ -4,3 +4,45 @@ src-tauri/target
 src-tauri/gen
 .DS_Store
 *.log
+_site/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.keystore
+*.mobileprovision
+id_rsa*
+id_ed25519*
+
+# Local application data and databases
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Model weights
+*.gguf
+*.safetensors
+*.bin
+*.part
+
+# Installers and build outputs
+*.dmg
+*.exe
+*.msi
+*.AppImage
+*.deb
+*.rpm
+installers/
+dist-release/
+
+# Editors and OS
+.idea/
+.vscode/
+Thumbs.db

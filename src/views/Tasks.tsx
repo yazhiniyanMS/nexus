@@ -14,10 +14,10 @@ const statusText: Record<StepStatus, string> = { pending: "pending", running: "r
 function StepIcon({ status }: { status: StepStatus }) {
   const map = {
     pending: <CircleDashed size={15} className="text-faint" />,
-    running: <Loader2 size={15} className="animate-spin text-sky-400" />,
-    awaiting_approval: <ShieldAlert size={15} className="text-amber-400" />,
-    completed: <Check size={15} className="text-emerald-400" />,
-    failed: <X size={15} className="text-red-400" />,
+    running: <Loader2 size={15} className="animate-spin text-lav" />,
+    awaiting_approval: <ShieldAlert size={15} className="text-warn" />,
+    completed: <Check size={15} className="text-accent" />,
+    failed: <X size={15} className="text-danger" />,
     cancelled: <Ban size={15} className="text-faint" />,
     skipped: <SkipForward size={15} className="text-faint" />,
   };
@@ -49,7 +49,7 @@ function NewTask({ ws, onCreated, onCancel }: { ws: Workspace; onCreated: (t: Ta
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          className="w-full rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-accent/60 focus:outline-none"
+          className="w-full rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
         />
       </Field>
       <Field label="Project" hint="Commands run in this project's folder.">
@@ -77,7 +77,7 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
   const waiting = step.status === "awaiting_approval";
 
   return (
-    <Card className={clsx("overflow-hidden", waiting && "border-amber-500/40")}>
+    <Card className={clsx("overflow-hidden", waiting && "border-warn/40")}>
       <div className="flex items-start gap-3 px-4 py-3">
         <div className="pt-0.5"><StepIcon status={step.status} /></div>
         <div className="min-w-0 flex-1">
@@ -85,7 +85,7 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
             <span className="text-[13px] font-medium">{step.position}. {step.title}</span>
             <Badge tone={statusTone[step.status]}>{statusText[step.status]}</Badge>
             {step.risk === "high" && <Badge tone="red">destructive</Badge>}
-            {step.exit_code !== null && step.exit_code !== 0 && <span className="text-xs text-red-300">exit {step.exit_code}</span>}
+            {step.exit_code !== null && step.exit_code !== 0 && <span className="text-xs text-danger">exit {step.exit_code}</span>}
           </div>
           {step.command ? (
             <code className="selectable mt-1.5 flex items-center gap-1.5 font-mono text-xs text-dim"><Terminal size={12} className="shrink-0" /><span className="break-all">{step.command}</span></code>
@@ -93,14 +93,14 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
             <div className="mt-1 text-xs text-faint">Manual step — you do this yourself, then confirm.</div>
           )}
         </div>
-        {!taskActive && <button title="Delete step" onClick={onDelete} className="text-faint hover:text-red-300"><Trash2 size={14} /></button>}
+        {!taskActive && <button title="Delete step" onClick={onDelete} className="text-faint hover:text-danger"><Trash2 size={14} /></button>}
       </div>
       {waiting && (
-        <div className="flex items-center gap-3 border-t border-amber-500/30 bg-amber-500/5 px-4 py-2.5">
-          <div className="min-w-0 flex-1 text-xs text-amber-100">
+        <div className="flex items-center gap-3 border-t border-warn/30 bg-warn/5 px-4 py-2.5">
+          <div className="min-w-0 flex-1 text-xs text-warn">
             {step.kind === "command" ? "NEXUS is waiting for your approval to run this command." : "Confirm once you have completed this step."}
             {step.risk === "high" && (
-              <div className="mt-1 flex items-center gap-1.5 font-medium text-red-300">
+              <div className="mt-1 flex items-center gap-1.5 font-medium text-danger">
                 <AlertTriangle size={13} /> This command can delete data, rewrite history or use elevated privileges. Read it carefully.
               </div>
             )}
@@ -244,8 +244,8 @@ function Detail({ id, providers, onDeleted, onChanged }: { id: string; providers
                   <Button size="sm" busy={busy === "plan"} onClick={() => act("plan", () => api.planWithAi(id, provider.id, null))}>
                     <Sparkles size={12} /> Plan with AI
                   </Button>
-                  <Select className="h-7 w-44 text-xs" value={provider.id} onChange={(e) => setProviderId(e.target.value)} aria-label="AI provider">
-                    {providers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.default_model ? ` · ${p.default_model}` : ""}</option>)}
+                  <Select className="h-7! w-44! text-xs" value={provider.id} onChange={(e) => setProviderId(e.target.value)} aria-label="AI provider">
+                    {providers.map((p) => <option key={p.id} value={p.id}>{p.name}{p.default_model ? ` · ${p.default_model}` : ""}{p.local ? "" : " (remote)"}</option>)}
                   </Select>
                 </>
               ) : (
@@ -295,7 +295,7 @@ export default function TasksView({ ws }: { ws: Workspace }) {
           <NewTask ws={ws} onCancel={() => setCreating(false)} onCreated={(t) => { setCreating(false); setSelected(t.id); void tasks.reload(); }} />
         </div>
       ) : current ? (
-        <Detail key={current} id={current} providers={providers.data ?? []} onChanged={() => void tasks.reload()} onDeleted={() => { setSelected(null); void tasks.reload(); }} />
+        <Detail key={current} id={current} providers={(providers.data ?? []).filter((p) => p.enabled)} onChanged={() => void tasks.reload()} onDeleted={() => { setSelected(null); void tasks.reload(); }} />
       ) : (
         <div className="flex-1">
           <Empty icon={<ListChecks size={30} />} title="No tasks yet">

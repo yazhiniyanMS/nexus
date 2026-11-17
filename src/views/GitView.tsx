@@ -1,8 +1,7 @@
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, GitBranch, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Minus, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Workspace } from "../App";
-import { ProjectPicker } from "../components/ProjectPicker";
 import { Badge, Button, DiffView, Empty, ErrorBanner, PageHeader, Spinner, Tabs } from "../components/ui";
 import { api, type FileStatus } from "../lib/api";
 import { errorText, timeAgo, useAsync } from "../lib/util";
@@ -12,17 +11,29 @@ type Selection = { title: string; load: () => Promise<string> };
 
 const statusLabel: Record<string, string> = { M: "modified", A: "added", D: "deleted", R: "renamed", C: "copied", T: "type", U: "conflict", "?": "untracked" };
 
-function FileRow({ f, letter, active, onClick }: { f: FileStatus; letter: string; active: boolean; onClick: () => void }) {
+function FileRow({ f, letter, active, onClick, action }: {
+  f: FileStatus; letter: string; active: boolean; onClick: () => void; action: { label: string; staged: boolean; run: () => void };
+}) {
   return (
-    <button onClick={onClick} className={clsx("flex w-full items-center gap-2 px-4 py-1.5 text-left hover:bg-raised", active && "bg-raised")}>
+    <div className={clsx("group flex items-center hover:bg-raised", active && "bg-raised")}>
+    <button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-4 text-left">
       <span
         title={statusLabel[letter] ?? letter}
-        className={clsx("w-4 shrink-0 text-center font-mono text-xs font-bold", letter === "D" ? "text-red-400" : letter === "?" || letter === "A" ? "text-emerald-400" : "text-amber-400")}
+        className={clsx("w-4 shrink-0 text-center font-mono text-xs font-bold", letter === "D" ? "text-danger" : letter === "?" || letter === "A" ? "text-accent" : "text-warn")}
       >
         {letter}
       </span>
       <span className="truncate font-mono text-xs">{f.path}</span>
     </button>
+      <button
+        title={action.label}
+        aria-label={`${action.label}: ${f.path}`}
+        onClick={action.run}
+        className="mr-2 grid size-6 shrink-0 place-items-center rounded text-dim hover:bg-line hover:text-ink"
+      >
+        {action.staged ? <Minus size={13} /> : <Plus size={13} />}
+      </button>
+    </div>
   );
 }
 
@@ -60,6 +71,18 @@ export default function GitView({ ws }: { ws: Workspace }) {
   const staged = files.filter((f) => !f.untracked && f.index !== ".");
   const unstaged = files.filter((f) => !f.untracked && f.worktree !== ".");
   const untracked = files.filter((f) => f.untracked);
+  const [actionError, setActionError] = useState<string>();
+  /** Stage or unstage paths. Only the index changes; files on disk are never modified. */
+  const setStaged = async (paths: string[], stage: boolean) => {
+    setActionError(undefined);
+    try {
+      await (stage ? api.gitStage(id, paths) : api.gitUnstage(id, paths));
+    } catch (e) {
+      setActionError(errorText(e));
+    }
+    setSel(null);
+    await status.reload();
+  };
   const refresh = () => {
     void status.reload();
     void log.reload();
@@ -69,11 +92,17 @@ export default function GitView({ ws }: { ws: Workspace }) {
   const group = (title: string, list: FileStatus[], letter: (f: FileStatus) => string, isStaged: boolean) =>
     list.length > 0 && (
       <div>
-        <div className="bg-panel px-4 py-1.5 text-xs font-semibold text-dim">{title} <span className="text-faint">{list.length}</span></div>
+        <div className="flex items-center bg-panel px-4 py-1.5 text-xs font-semibold text-dim">
+          <span className="flex-1">{title} <span className="text-faint">{list.length}</span></span>
+          <button className="font-medium text-dim hover:text-ink" onClick={() => void setStaged(list.map((f) => f.path), !isStaged)}>
+            {isStaged ? "Unstage all" : "Stage all"}
+          </button>
+        </div>
         {list.map((f) => {
           const title = `${f.path}${isStaged ? " (staged)" : ""}`;
           return (
-            <FileRow key={title} f={f} letter={letter(f)} active={sel?.title === title} onClick={() => setSel({ title, load: () => api.gitDiff(id, f.path, isStaged, f.untracked) })} />
+            <FileRow key={title} f={f} letter={letter(f)} active={sel?.title === title} onClick={() => setSel({ title, load: () => api.gitDiff(id, f.path, isStaged, f.untracked) })}
+              action={{ label: isStaged ? "Unstage" : "Stage", staged: isStaged, run: () => void setStaged([f.path], !isStaged) }} />
           );
         })}
       </div>
@@ -82,25 +111,22 @@ export default function GitView({ ws }: { ws: Workspace }) {
   return (
     <>
       <PageHeader
-        title="Git"
+        title={`Git · ${ws.project?.name ?? ""}`}
         subtitle={
           s?.is_repo ? (
             <span className="flex items-center gap-2">
               <GitBranch size={12} /> {s.branch ?? "detached"}
               {s.upstream && <span className="text-faint">→ {s.upstream}</span>}
-              {s.ahead > 0 && <span className="flex items-center text-emerald-300"><ArrowUp size={11} />{s.ahead}</span>}
-              {s.behind > 0 && <span className="flex items-center text-amber-300"><ArrowDown size={11} />{s.behind}</span>}
+              {s.ahead > 0 && <span className="flex items-center text-accent"><ArrowUp size={11} />{s.ahead}</span>}
+              {s.behind > 0 && <span className="flex items-center text-warn"><ArrowDown size={11} />{s.behind}</span>}
             </span>
           ) : undefined
         }
         actions={
-          <>
-            <ProjectPicker ws={ws} />
-            <Button onClick={refresh}><RefreshCw size={13} /> Refresh</Button>
-          </>
+<Button onClick={refresh}><RefreshCw size={13} /> Refresh</Button>
         }
       />
-      <div className="empty:hidden p-3 pb-0"><ErrorBanner message={status.error ?? log.error ?? branches.error} /></div>
+      <div className="empty:hidden p-3 pb-0"><ErrorBanner message={actionError ?? status.error ?? log.error ?? branches.error} /></div>
       {status.loading && !s ? (
         <Spinner />
       ) : !s?.is_repo ? (

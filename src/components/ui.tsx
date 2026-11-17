@@ -16,10 +16,10 @@ export function Button({ variant = "default", size = "md", busy, className, chil
       className={clsx(
         "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:opacity-45",
         size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-[13px]",
-        variant === "primary" && "bg-accent text-black hover:bg-emerald-300",
-        variant === "default" && "border border-line bg-raised text-ink hover:bg-[#1c1c20]",
+        variant === "primary" && "bg-accent text-black hover:bg-accent/85",
+        variant === "default" && "border border-line bg-raised text-ink hover:bg-hover",
         variant === "ghost" && "text-dim hover:bg-raised hover:text-ink",
-        variant === "danger" && "border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20",
+        variant === "danger" && "border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20",
         className,
       )}
     >
@@ -30,7 +30,7 @@ export function Button({ variant = "default", size = "md", busy, className, chil
 }
 
 const fieldClass =
-  "h-8 w-full rounded-md border border-line bg-bg px-2.5 text-[13px] text-ink placeholder:text-faint focus:border-accent/60 focus:outline-none";
+  "h-8 w-full rounded-md border border-line bg-bg px-2.5 text-[13px] text-ink placeholder:text-faint focus:border-lav/60 focus:outline-none";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={clsx(fieldClass, props.className)} />;
@@ -56,10 +56,10 @@ export function Card({ className, children }: { className?: string; children: Re
 
 const tones = {
   neutral: "border-line bg-raised text-dim",
-  green: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
-  red: "border-red-500/25 bg-red-500/10 text-red-300",
-  amber: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-  blue: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+  green: "border-accent/25 bg-accent/10 text-accent",
+  red: "border-danger/25 bg-danger/10 text-danger",
+  amber: "border-warn/25 bg-warn/10 text-warn",
+  blue: "border-lav/25 bg-lav/10 text-lav",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: keyof typeof tones; children: ReactNode }) {
@@ -81,7 +81,7 @@ export function Spinner({ label }: { label?: string }) {
 export function ErrorBanner({ message }: { message?: string | null }) {
   if (!message) return null;
   return (
-    <div className="selectable flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-200">
+    <div className="selectable flex items-start gap-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-danger">
       <AlertTriangle size={15} className="mt-0.5 shrink-0" />
       <span className="break-words">{message}</span>
     </div>
@@ -139,9 +139,9 @@ export function DiffView({ text }: { text: string }) {
           key={i}
           className={clsx(
             "px-2 whitespace-pre",
-            line.startsWith("+") && !line.startsWith("+++") && "bg-emerald-500/10 text-emerald-200",
-            line.startsWith("-") && !line.startsWith("---") && "bg-red-500/10 text-red-200",
-            line.startsWith("@@") && "text-sky-300",
+            line.startsWith("+") && !line.startsWith("+++") && "bg-accent/10 text-accent",
+            line.startsWith("-") && !line.startsWith("---") && "bg-danger/10 text-danger",
+            line.startsWith("@@") && "text-lav",
             (line.startsWith("diff ") || line.startsWith("commit ")) && "mt-2 font-semibold text-ink",
           )}
         >

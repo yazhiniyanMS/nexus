@@ -1,0 +1,28 @@
+# Main branch CI: full build and installers on every push to main, kept as workflow artifacts.
+# Nothing is published; releases come only from version tags (release.yml).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Comma-separated subset of macos, windows, linux
+        default: windows,linux
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      retention-days: 14
+      # macOS is the reference platform and is checked locally; pushes build Windows and Linux.
+      # Run this workflow by hand with "macos" to include it.
+      platforms: ${{ inputs.platforms || 'windows,linux' }}
