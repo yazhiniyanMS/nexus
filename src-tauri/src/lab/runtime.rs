@@ -94,6 +94,98 @@ struct Proc {
     info: ManagedInfo,
     logs: Arc<Mutex<VecDeque<String>>>,
     stop: watch::Sender<bool>,
+    /// The program that was started, to recognise it again after an unclean exit.
+    binary: PathBuf,
+}
+
+/// File in the app's data folder listing the servers that are running, so a server left behind
+/// by a crash or a forced kill can be stopped on the next launch.
+const RECORDS_FILE: &str = "lab-servers.json";
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ServerRecord {
+    pub pid: u32,
+    pub binary: String,
+    pub started_at: String,
+}
+
+fn save_records(state: &AppState) {
+    let records: Vec<ServerRecord> = state
+        .lab
+        .runtimes
+        .lock()
+        .values()
+        .filter(|p| p.info.status != "exited")
+        .filter_map(|p| {
+            Some(ServerRecord {
+                pid: u32::try_from(p.info.pid?).ok()?,
+                binary: p.binary.to_string_lossy().into_owned(),
+                started_at: p.info.started_at.clone(),
+            })
+        })
+        .collect();
+    let path = state.data_dir.join(RECORDS_FILE);
+    if records.is_empty() {
+        let _ = std::fs::remove_file(path);
+    } else if let Ok(text) = serde_json::to_string(&records) {
+        let _ = std::fs::write(path, text);
+    }
+}
+
+/// Processes of a recorded server that are still running: members of its process group (Unix)
+/// or the process itself (Windows) whose command line still names the recorded program.
+/// Anything else, such as an unrelated process that reused the number, is left alone.
+#[cfg(unix)]
+fn leftover_members(record: &ServerRecord, ps_output: &str) -> Vec<i32> {
+    let name = Path::new(&record.binary).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    if name.is_empty() {
+        return vec![];
+    }
+    ps_output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let pid: i32 = parts.next()?.parse().ok()?;
+            let pgid: u32 = parts.next()?.parse().ok()?;
+            let command: Vec<&str> = parts.collect();
+            let program = Path::new(command.first()?).file_name()?.to_string_lossy().into_owned();
+            (pgid == record.pid && program == name).then_some(pid)
+        })
+        .collect()
+}
+
+/// Called once at startup: stop servers a previous run started and could not stop itself.
+pub fn reap_leftovers(data_dir: &Path) {
+    let path = data_dir.join(RECORDS_FILE);
+    let Ok(text) = std::fs::read_to_string(&path) else { return };
+    let _ = std::fs::remove_file(&path);
+    let records: Vec<ServerRecord> = serde_json::from_str(&text).unwrap_or_default();
+    if records.is_empty() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        let Ok(out) = std::process::Command::new("ps").args(["-axo", "pid=,pgid=,command="]).output() else { return };
+        let listing = String::from_utf8_lossy(&out.stdout).into_owned();
+        for record in &records {
+            for pid in leftover_members(record, &listing) {
+                // SAFETY: plain signal delivery to a process this app started in an earlier run.
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+            }
+        }
+    }
+    #[cfg(windows)]
+    for record in &records {
+        let name = Path::new(&record.binary).file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        let mut cmd = std::process::Command::new("tasklist");
+        cmd.args(["/FI", &format!("PID eq {}", record.pid), "/NH", "/FO", "CSV"]);
+        platform::process::hide_window(&mut cmd);
+        let still_ours =
+            cmd.output().map(|o| String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains(&format!("\"{name}\""))).unwrap_or(false);
+        if still_ours {
+            platform::process::kill_tree(Some(record.pid));
+        }
+    }
 }
 
 /// Server processes started by NEXUS.
@@ -499,7 +591,8 @@ pub(crate) async fn start_process<R: Runtime>(app: &AppHandle<R>, spec: &StartSp
         started_at: db::now(),
         command: std::iter::once(binary.to_string_lossy().into_owned()).chain(args.iter().cloned()).collect::<Vec<_>>().join(" "),
     };
-    state.lab.runtimes.lock().insert(id.clone(), Proc { info: info.clone(), logs, stop: stop_tx });
+    state.lab.runtimes.lock().insert(id.clone(), Proc { info: info.clone(), logs, stop: stop_tx, binary: binary.to_path_buf() });
+    save_records(&state);
     activity::log(&state.db.conn(), "models", &format!("Started a {} server on port {}", spec.runtime, spec.port), None);
 
     // Waiter: ends the process on request and records how it ended.
@@ -526,6 +619,7 @@ pub(crate) async fn start_process<R: Runtime>(app: &AppHandle<R>, spec: &StartSp
             info.exit_code = code;
             info.pid = None;
         });
+        save_records(&state);
         let _ = wait_app.emit(EVENT_RUNTIME, &wait_id);
     });
 
@@ -836,6 +930,46 @@ mod tests {
         assert!(loaded(&state, &other).await.unwrap().is_empty());
         assert!(unload(&state, &other, "x").await.is_err());
         let _ = std::fs::remove_dir_all(&state.data_dir);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod leftover_tests {
+    use super::*;
+
+    #[test]
+    fn only_processes_of_the_recorded_program_and_group_are_selected() {
+        let record = ServerRecord { pid: 500, binary: "/usr/local/bin/ollama".into(), started_at: String::new() };
+        let ps = "  500   500 /usr/local/bin/ollama serve\n  612   500 /Applications/Ollama.app/Contents/Resources/ollama runner --model m --port 57420\n  700   500 /usr/bin/python3 other.py\n  800   800 /usr/local/bin/ollama serve\n  900   900 /bin/zsh\n";
+        assert_eq!(leftover_members(&record, ps), [500, 612], "the server and its runner, nothing outside the group or not named ollama");
+        assert!(leftover_members(&ServerRecord { binary: String::new(), ..record.clone() }, ps).is_empty());
+        assert!(leftover_members(&ServerRecord { pid: 123, ..record }, ps).is_empty(), "a group that no longer exists selects nothing");
+    }
+
+    #[test]
+    fn a_left_behind_server_is_stopped_at_the_next_launch() {
+        use std::os::unix::process::CommandExt;
+        let dir = std::env::temp_dir().join(format!("nexus-reap-{}", db::new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A stand-in server in its own process group, as NEXUS starts them.
+        let mut child = std::process::Command::new("/bin/sleep").arg("300").process_group(0).spawn().unwrap();
+        let pid = child.id();
+        // An unrelated process that must survive even though a record names its number.
+        let mut other = std::process::Command::new("/bin/sleep").arg("301").spawn().unwrap();
+        let records = vec![
+            ServerRecord { pid, binary: "/bin/sleep".into(), started_at: String::new() },
+            ServerRecord { pid: other.id(), binary: "/usr/local/bin/ollama".into(), started_at: String::new() },
+        ];
+        std::fs::write(dir.join(RECORDS_FILE), serde_json::to_string(&records).unwrap()).unwrap();
+        reap_leftovers(&dir);
+        let status = child.wait().unwrap();
+        assert!(!status.success(), "the recorded server was stopped");
+        assert!(other.try_wait().unwrap().is_none(), "a process that does not match its record is left alone");
+        assert!(!dir.join(RECORDS_FILE).exists());
+        other.kill().unwrap();
+        let _ = other.wait();
+        reap_leftovers(&dir); // nothing recorded: nothing happens
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 

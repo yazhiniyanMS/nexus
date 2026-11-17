@@ -12,7 +12,7 @@ Built with Tauri 2, React + TypeScript, Rust, SQLite, Tailwind CSS and Monaco.
 | **Intelligence** | A code index for Rust, TypeScript, JavaScript, Python and Go. Interactive dependency graph and architecture map with cycle detection; ranked symbol search; reference search; per-file connections (imports, used by); source lookup for questions with optional AI answers that cite the files they used; generated architecture document. Works without an AI provider. |
 | **Agents** | Describe an outcome; five specialised agents (Research, Architect, Developer, Testing, Review) carry it out under one orchestration engine. The plan, every command and the final diff each wait for your approval. Work happens in an isolated Git worktree, your uncommitted changes are never touched, and applying is all-or-nothing. Runs are queued, pausable, cancellable, resumable after a crash, and fully logged. Requires an AI provider. |
 | **Terminal** | Your own shell inside each project, in real pseudo-terminals. Tabs, split panes you can drag to resize, process status and exit codes, restart, and search across saved output. The layout is saved per project; output is kept on disk so it survives leaving the screen or reloading. Only what you type is sent to a shell: agents, tasks and AI have no way to write to a terminal. |
-| **Model Lab** | Experimental. Detects local runtimes (Ollama, llama.cpp servers, OpenAI-compatible endpoints), lists their models with the metadata they report, runs prompts with streaming, benchmarks models on your hardware, compares them, and manages connections. Model downloads only when you start one. |
+| **Model Lab** | Experimental. Detects local runtimes (Ollama, llama.cpp servers, OpenAI-compatible endpoints) and can start Ollama and llama.cpp servers; lists models with the metadata they report; downloads models only when you ask (Ollama pull, Hugging Face GGUF files with checksum verification); runs prompts with streaming and measured timings; benchmarks and compares models on your hardware; manages connections and defaults used by Intelligence and Agents. See [docs/MODEL_LAB.md](docs/MODEL_LAB.md). |
 | **Search** | File-name and content search (text or regex) across every project. Respects `.gitignore` and skips generated folders. |
 | **Git** | Branch, upstream and ahead/behind; staged, changed and untracked files with diffs; commit history with patches; local and remote branches. Stage and unstage files; these only change the index and never touch files on disk. |
 | **Tasks** | Tasks made of steps. Steps can be suggested from the project's manifests or planned by AI. **Nothing runs without approval**: each command waits for an explicit yes, destructive-looking commands are flagged, output streams live, and a run can be cancelled (the whole process tree is killed). |
@@ -98,6 +98,7 @@ No account, no analytics, no background network activity. What can leave your ma
 - Commands run only as task steps or agent test steps, only after the user approves that specific command, or because the user typed them into a terminal.
 - A terminal is the user's own interactive shell and is not sandboxed. The only path into it is keyboard input and paste on the Terminal screen; no agent, task or AI code can send input to a terminal. A terminal starts inside the selected project and does not inherit NEXUS's stored API keys (they are never in the environment).
 - Agents write only inside an isolated Git worktree; paths are confined and symlinks refused. Changes reach the project only when the user approves the exact diff.
+- Model Lab never runs model output; it starts only Ollama and llama.cpp servers, from their own programs with fixed arguments and no shell, bound to 127.0.0.1. Project content goes to a connection that is not on this machine only after the user confirms it on that screen, and the core checks that confirmation.
 - API keys live in the macOS Keychain, Windows Credential Manager or the Linux Secret Service.
 - A strict Content Security Policy is applied; no remote scripts or CDNs are loaded.
 
@@ -108,13 +109,14 @@ No account, no analytics, no background network activity. What can leave your ma
 - Intelligence extracts symbols and imports with line-based rules, not a parser, so unusual constructs can be missed; references are matched by name, not by scope; Java, C#, C/C++, Kotlin and Swift are not indexed. See `docs/ARCHITECTURE.md`.
 - The code index is rebuilt in full on request; there is no file watcher.
 - Git supports staging and unstaging only (no committing, discarding or pushing from the app yet).
-- AI replies are not streamed, and chat history is not saved between sessions.
+- AI Workspace chat replies are not streamed and its history is not saved between sessions (the Model Lab Playground streams and saves sessions).
+- Model Lab: memory use and load time are reported only by Ollama; OpenAI-compatible endpoints report model names only; NEXUS can start Ollama and llama.cpp servers but does not install runtimes; Hugging Face downloads are limited to public, non-gated repositories.
 - The AI chat receives a project summary, not file contents.
 - Installers are unsigned; signing is prepared but needs certificates, and there is no auto-update.
 - Windows and Linux are new and have had little hands-on use; only x64 is built there.
 - Linux needs a running Secret Service (GNOME Keyring, KWallet) to store API keys.
 
-The design of Agents and Terminal and the roadmap for Model Lab, Git Intelligence and Testing Lab are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The design of Agents, Terminal and Model Lab and the roadmap for Git Intelligence and Testing Lab are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## License
 

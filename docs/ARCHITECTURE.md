@@ -213,14 +213,48 @@ Known limits: shells do not survive closing NEXUS; saved output is replayed at t
 
 ### Milestone 4 — Model Lab (implemented, experimental)
 
-Built in `src-tauri/src/lab/` (`runtime`, `registry`, `gguf`, `storage`, `download`, `infer`, `bench`, `hardware`) and `src/views/lab/`, with automated tests. The notes below are the original plan; a full write-up of the implementation has not been added yet.
+Usage guide: [MODEL_LAB.md](MODEL_LAB.md).
 
+Backend (`src-tauri/src/lab/`). Providers and credentials stay in `ai.rs`; the lab never handles an API key itself.
 
-1. Extend `ai::detect_local` into a discovery service (Ollama, LM Studio, llama.cpp server, vLLM, any OpenAI-compatible URL).
-2. Tables: `model_configs` (temperature, context, system prompt presets), `model_benchmarks` (prompt set, tokens/s, time to first token, total time, date, machine).
-3. Streaming completions (also unblocks streamed chat and agents).
-4. Benchmarks run as cancellable jobs; charts of history per model.
-5. Tests against a local stub server.
+| Module | Responsibility |
+| --- | --- |
+| `mod.rs` | Connection kinds and the generation settings each accepts; Model Lab settings (default connection and model, generation settings, model folder) stored through `settings.rs`; cancel handles for running jobs; start-up recovery and shutdown |
+| `registry.rs` | Model library: asks every enabled connection what it serves (`/api/tags` + `/api/show`, `/v1/models` + `/props`, the Anthropic Models API, `/models`) and reads GGUF files in the model folder. Cached in `lab_models`, so the library opens when a runtime is offline. Favourites survive a runtime dropping the model |
+| `gguf.rs` | Reads a GGUF header (metadata and tensor shapes, never weights) with size limits; quantization names follow llama.cpp's `llama_ftype` |
+| `runtime.rs` | Detection of installed runtimes and answering endpoints; managed `ollama serve` / `llama-server` processes (fixed arguments, no shell, loopback only, credentials removed from the environment, own process group, logs kept); models in memory and unloading (Ollama) |
+| `storage.rs` | The model folder: safe file names, disk space, guarded deletion (only completed NEXUS downloads, never symlinks or the user's own files); folder chosen through a dialog opened by the core |
+| `download.rs` | File downloads (`.part` file, range resume, streaming SHA-256, GGUF check, atomic rename, HTTPS-only redirects, disk-space check), Ollama pulls (progress relayed, cancel by closing the stream), Hugging Face listing |
+| `infer.rs` | Streaming inference over three wire formats (Ollama JSON lines, OpenAI SSE incl. llama.cpp `timings`, Anthropic SSE), time to first token and total time measured in the core, token counts and timings taken from the runtime, cancellation by dropping the connection; saved Playground sessions |
+| `bench.rs` | Benchmark suites run one request at a time, warm-up and cold-load options, give-up after two failures in a row, statistics (median, range, sample standard deviation), memory from the runtime, JSON/CSV export |
+| `hardware.rs` | OS, CPU, cores and memory, read from the system and stored with each benchmark |
+
+Tables (migration 5): `settings`, `lab_models`, `lab_downloads`, `lab_sessions`, `lab_bench_suites`, `lab_bench_runs`; `providers.enabled` added. Existing rows are kept and existing connections stay enabled (tested by upgrading a populated previous-version database).
+
+Events: `nexus://lab-infer` (streamed text and the final result, keyed by a request id the UI chooses), `nexus://lab-download`, `nexus://lab-bench`, `nexus://lab-runtime`.
+
+UI (`src/views/ModelLab.tsx`, `src/views/lab/`): Library (with Add model and Storage panels), Runtimes, Playground, Benchmarks, Compare, Providers. Pure logic (formatting that keeps unknown values distinct from zero, filtering, sorting, settings validation) is in `src/lib/lab.ts` with Node tests. Shared components outside the lab: `ProviderManager` (also used by AI Workspace), `ModelChoice` (Intelligence, Agents) and `RuntimeChip` (Terminal).
+
+Integration:
+
+- **Project Intelligence:** Ask and the architecture narrative use the shared model chooser, which starts on the Model Lab default when that model is local, and the existing retrieval and citations.
+- **Agents:** a task gets an explicit connection and model at creation (the connection's default is resolved then and stored); disabled connections are refused; the task never switches model.
+- **Terminal:** a read-only runtime status chip with addresses to copy; it never types into a shell.
+- **AI Workspace:** starts on the default connection and says where messages go.
+
+Rules the implementation keeps:
+
+- Nothing is estimated. Metrics the runtime does not report are `null` and shown as a dash; speed is labelled *derived* when computed from the client clock.
+- Remote use needs confirmation: the UI asks per screen, and the core refuses inference, benchmarks, codebase questions, narratives and agent tasks aimed at a non-loopback endpoint unless the request carries the user's confirmation.
+- Secrets are redacted from errors (the key itself, bearer tokens, `sk-` keys, URL user-info and query strings); base URLs may not contain credentials, queries or fragments.
+- Model output is text only.
+- Process cleanup: managed servers are stopped on quit, on SIGTERM/SIGINT/SIGHUP (Unix), and — after a crash or SIGKILL — at the next launch from `lab-servers.json`, matching each recorded process group and program name so an unrelated process that reused a number is not touched.
+
+Tests (in the 155 Rust tests): parsers built on captured real responses from Ollama 0.40, llama.cpp and Hugging Face; streaming, metrics and cancellation against a local test server (`lab/testserver.rs`); downloads (checksum, resume, cancel, non-GGUF content, redirects, disk space); storage safety; registry merging and offline behaviour; benchmark runs, failures, cancellation and export; settings; migration upgrade; shutdown; left-over server cleanup; remote-confirmation guards. Frontend: `tests/lab.test.mjs`.
+
+Verified in the running app on macOS with Ollama 0.40.16 and a 27.8B model: detection, starting and stopping Ollama from NEXUS, library details, real streamed inference with Stop, saved sessions, two real benchmarks with exports, comparison, a 1.2 MB Hugging Face download with checksum verification and deletion, an Ollama pull with cancel and resume, provider test/disable/remove, settings persisting across a restart, codebase questions answered by the default model, the agent form, the Terminal chip, the remote-confirmation gate, and server cleanup after SIGTERM and after SIGKILL.
+
+Known limits: memory and load time only from Ollama; OpenAI-compatible endpoints report names only; only Ollama and llama.cpp servers can be started; no Hugging Face login; benchmarks are sequential; no llama.cpp binary was available for a live run of that path (covered by tests); Windows and Linux have not been exercised with real runtimes.
 
 ### Milestone 5 — Git Intelligence
 

@@ -25,7 +25,7 @@ Only as a direct result of something you do:
 
 | You do this | This is sent | To |
 | --- | --- | --- |
-| Send a prompt, ask a codebase question with an AI answer, or run an agent, using a **remote** provider you configured | The prompt. For codebase questions and agents this includes the source excerpts the answer is based on. | That provider's address. The screen says when a provider is not on this machine, and Model Lab asks for confirmation before the first remote request. |
+| Send a prompt, ask a codebase question with an AI answer, or run an agent, using a **remote** provider you configured | The prompt. For codebase questions and agents this includes the source excerpts the answer is based on. | That provider's address. The screen says when a provider is not on this machine and asks you to confirm before anything is sent to it; NEXUS refuses to send project content to a remote provider without that confirmation. |
 | Use a **local** runtime (Ollama, llama.cpp, LM Studio on `localhost`) | The same content | Only your own machine |
 | Search for or download a model in Model Lab | Your search text, then the file request | Hugging Face, or the address you typed, or your Ollama server |
 | Click **Report a bug**, **Request a feature** or **Documentation** | Nothing from NEXUS; your browser opens a GitHub page | github.com |

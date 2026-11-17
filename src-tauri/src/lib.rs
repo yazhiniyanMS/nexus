@@ -63,6 +63,7 @@ pub fn run() {
             agents::recover_interrupted(&db)?;
             terminal::recover_interrupted(&db, &dir)?;
             lab::recover_interrupted(&db)?;
+            lab::runtime::reap_leftovers(&dir);
             let http = reqwest::Client::builder()
                 .user_agent(concat!("nexus/", env!("CARGO_PKG_VERSION")))
                 .connect_timeout(std::time::Duration::from_secs(10))
@@ -78,6 +79,29 @@ pub fn run() {
             });
             #[cfg(debug_assertions)]
             e2e::start(app.handle());
+            // A termination signal (logout, `kill`, Ctrl+C in a terminal) ends the app the same
+            // way as quitting it, so servers it started are stopped too.
+            #[cfg(unix)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use tokio::signal::unix::{signal, SignalKind};
+                    let (Ok(mut term), Ok(mut int), Ok(mut hup)) =
+                        (signal(SignalKind::terminate()), signal(SignalKind::interrupt()), signal(SignalKind::hangup()))
+                    else {
+                        return;
+                    };
+                    tokio::select! {
+                        _ = term.recv() => {}
+                        _ = int.recv() => {}
+                        _ = hup.recv() => {}
+                    }
+                    if let Some(state) = handle.try_state::<AppState>() {
+                        lab::shutdown(&state);
+                    }
+                    handle.exit(0);
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
