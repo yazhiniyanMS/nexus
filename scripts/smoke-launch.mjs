@@ -19,7 +19,9 @@ child.on("error", (e) => (exited = { code: -1, signal: String(e) }));
 
 const started = Date.now();
 const db = join(data, "nexus.db");
+let dbAt = null;
 const timer = setInterval(() => {
+  if (dbAt === null && existsSync(db)) dbAt = (Date.now() - started) / 1000;
   const elapsed = (Date.now() - started) / 1000;
   const finish = (ok, message) => {
     clearInterval(timer);
@@ -36,6 +38,7 @@ const timer = setInterval(() => {
   };
   if (exited) return finish(false, `FAIL: the app exited after ${elapsed.toFixed(1)}s (${JSON.stringify(exited)})`);
   // Up for 8 seconds with a database on disk: it started and ran its migrations.
-  if (existsSync(db) && elapsed > 8) return finish(true, `OK: running after ${elapsed.toFixed(1)}s, database created at ${db}`);
+  // Up for 8 seconds after the database appeared: it started, ran its migrations and stayed up.
+  if (dbAt !== null && elapsed > dbAt + 8) return finish(true, `OK: database created ${dbAt.toFixed(1)}s after launch; still running at ${elapsed.toFixed(1)}s`);
   if (elapsed > 60) return finish(false, "FAIL: no database after 60s");
 }, 500);

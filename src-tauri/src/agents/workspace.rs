@@ -23,13 +23,14 @@ pub fn create(project: &Path, dest: &Path) -> Result<String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }
-    git(project, &["worktree", "add", "--detach", &dest.to_string_lossy(), &base])?;
+    // Git cannot use Windows verbatim paths (\\?\C:\...), so it is given the plain spelling.
+    git(project, &["worktree", "add", "--detach", &crate::platform::paths::display(dest), &base])?;
     Ok(base)
 }
 
 /// Remove a workspace. Safe to call when it no longer exists.
 pub fn remove(project: &Path, dest: &Path) {
-    if dest.exists() && git(project, &["worktree", "remove", "--force", &dest.to_string_lossy()]).is_err() {
+    if dest.exists() && git(project, &["worktree", "remove", "--force", &crate::platform::paths::display(dest)]).is_err() {
         let _ = fs::remove_dir_all(dest);
     }
     let _ = git(project, &["worktree", "prune"]);
@@ -216,7 +217,7 @@ pub mod tests {
 
     /// A committed Git repository in a temp folder.
     pub fn repo(files: &[(&str, &str)]) -> PathBuf {
-        let dir = temp_project(files).canonicalize().unwrap();
+        let dir = crate::platform::paths::canonical(&temp_project(files)).unwrap();
         git(&dir, &["init", "-q", "-b", "main"]).unwrap();
         git(&dir, &["add", "-A"]).unwrap();
         git(&dir, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"]).unwrap();

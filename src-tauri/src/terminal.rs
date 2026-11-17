@@ -280,12 +280,27 @@ pub fn open<R: Runtime>(
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         let mut pending = Vec::new();
+        // Windows ConPTY (created with "inherit cursor") starts by asking where the cursor is and
+        // prints nothing until it is told. The core answers that first question itself: the screen
+        // may not be attached yet, and it ignores queries found in replayed output on purpose.
+        let mut handshake = Handshake::new(cfg!(windows));
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    let end = log.lock().unwrap().append(&buf[..n]);
-                    pending.extend_from_slice(&buf[..n]);
+                    let mut chunk = buf[..n].to_vec();
+                    if handshake.answer(&mut chunk) {
+                        let state = reader_app.state::<AppState>();
+                        let mut live = state.terminal.live.lock().unwrap();
+                        if let Some(session) = live.get_mut(&reader_id) {
+                            let _ = session.writer.write_all(CURSOR_AT_ORIGIN).and_then(|_| session.writer.flush());
+                        }
+                    }
+                    if chunk.is_empty() {
+                        continue;
+                    }
+                    let end = log.lock().unwrap().append(&chunk);
+                    pending.extend_from_slice(&chunk);
                     let data = take_utf8(&mut pending);
                     if !data.is_empty() {
                         let _ = reader_app.emit(EVENT_OUTPUT, OutputEvent { id: reader_id.clone(), data, end });
@@ -313,6 +328,43 @@ pub fn open<R: Runtime>(
 
     let _ = app.emit(EVENT_CHANGED, &id);
     Ok(session)
+}
+
+const CURSOR_QUERY: &[u8] = b"\x1b[6n";
+/// The answer to a cursor-position query for a fresh console: row 1, column 1.
+const CURSOR_AT_ORIGIN: &[u8] = b"\x1b[1;1R";
+
+/// Looks for the one cursor-position query a new Windows console sends before its first output,
+/// and takes it out of the stream so the screen never answers it a second time.
+struct Handshake {
+    active: bool,
+    seen: usize,
+}
+
+impl Handshake {
+    /// Only the start of a session is searched; later queries belong to programs and go to the screen.
+    const WINDOW: usize = 4096;
+
+    fn new(active: bool) -> Self {
+        Handshake { active, seen: 0 }
+    }
+
+    /// Remove the first query from `chunk`. True when it was found and must be answered.
+    fn answer(&mut self, chunk: &mut Vec<u8>) -> bool {
+        if !self.active {
+            return false;
+        }
+        if let Some(at) = chunk.windows(CURSOR_QUERY.len()).position(|w| w == CURSOR_QUERY) {
+            chunk.drain(at..at + CURSOR_QUERY.len());
+            self.active = false;
+            return true;
+        }
+        self.seen += chunk.len();
+        if self.seen > Self::WINDOW {
+            self.active = false;
+        }
+        false
+    }
 }
 
 /// Remove ANSI escape sequences and carriage returns so output can be searched as plain text.
@@ -535,6 +587,24 @@ mod tests {
         assert!(pending.is_empty());
         let mut invalid = vec![b'a', 0xff, b'b'];
         assert_eq!(take_utf8(&mut invalid), "a\u{fffd}b");
+    }
+
+    #[test]
+    fn the_first_cursor_query_is_answered_once_and_removed() {
+        let mut h = Handshake::new(true);
+        let mut first = b"\x1b[?9001h\x1b[6nMicrosoft Windows".to_vec();
+        assert!(h.answer(&mut first));
+        assert_eq!(first, b"\x1b[?9001hMicrosoft Windows");
+        // A later query comes from a program in the terminal and is left for the screen.
+        let mut later = b"\x1b[6n".to_vec();
+        assert!(!h.answer(&mut later));
+        assert_eq!(later, b"\x1b[6n");
+        // Off on Unix, and gives up after the start of the session.
+        let mut unix = b"\x1b[6n".to_vec();
+        assert!(!Handshake::new(false).answer(&mut unix));
+        let mut h = Handshake::new(true);
+        assert!(!h.answer(&mut vec![b'x'; 5000]));
+        assert!(!h.answer(&mut b"\x1b[6n".to_vec()));
     }
 
     #[test]
