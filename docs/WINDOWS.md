@@ -1,6 +1,6 @@
 # NEXUS on Windows
 
-Windows support is new in the 0.1.0 beta. See [RELEASES.md](RELEASES.md#verification-status) for exactly what has and has not been tested.
+Windows support is new in the 0.1.0 beta. CI on `windows-latest` builds both installers, runs the test suite (terminals included, on real ConPTY), installs the NSIS package, launches it and uninstalls it. Nobody has used it by hand yet. See [RELEASES.md](RELEASES.md#verification-status).
 
 ## How Windows differs inside NEXUS
 
@@ -18,6 +18,9 @@ Windows support is new in the 0.1.0 beta. See [RELEASES.md](RELEASES.md#verifica
 | Disk space | Read with `GetDiskFreeSpaceExW`. |
 
 ## Known limitations
+
+- Agent end-to-end tests and model-server process tests run only on macOS and Linux so far; their Windows paths are exercised only partly by other tests.
+- The `.msi` is built but has not been installed in CI; the NSIS installer has.
 
 - The installers are unsigned, so SmartScreen warns on first run.
 - Only x64 is built. ARM64 Windows is not built or tested.

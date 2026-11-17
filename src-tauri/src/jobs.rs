@@ -116,15 +116,20 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     #[tokio::test]
     async fn scrubs_credentials_from_the_command_environment() {
         std::env::set_var("NEXUS_TEST_API_KEY", "should-not-leak");
         std::env::set_var("NEXUS_TEST_PLAIN", "visible");
         let (_tx, mut rx) = watch::channel(false);
-        let cmd = "echo key=[$NEXUS_TEST_API_KEY] plain=[$NEXUS_TEST_PLAIN]";
+        let cmd = if cfg!(windows) {
+            "echo key=[%NEXUS_TEST_API_KEY%] plain=[%NEXUS_TEST_PLAIN%]"
+        } else {
+            "echo key=[$NEXUS_TEST_API_KEY] plain=[$NEXUS_TEST_PLAIN]"
+        };
         let scrubbed = run_command(cmd, None, true, &mut rx, |_| {}).await.unwrap();
-        assert_eq!(scrubbed.output.trim(), "key=[] plain=[visible]");
+        // cmd.exe prints an unset %VAR% as written; sh prints nothing. Either way the value is gone.
+        assert!(!scrubbed.output.contains("should-not-leak"), "{}", scrubbed.output);
+        assert!(scrubbed.output.contains("plain=[visible]"), "{}", scrubbed.output);
         let kept = run_command(cmd, None, false, &mut rx, |_| {}).await.unwrap();
         assert!(kept.output.contains("should-not-leak"));
     }

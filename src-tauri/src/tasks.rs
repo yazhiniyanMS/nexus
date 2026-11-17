@@ -602,7 +602,6 @@ mod tests {
         assert_eq!(load_task(&conn, "t").unwrap().status, "cancelled");
     }
     /// End-to-end run against a mock Tauri app: approval gate, real command execution, skip and cancel.
-    #[cfg(unix)]
     #[test]
     fn runs_approves_skips_and_cancels() {
         use std::time::Duration;
@@ -615,7 +614,8 @@ mod tests {
             ("echo", Some("echo hello-nexus && echo err 1>&2")),
             ("skipped", Some("echo never")),
             ("manual", None),
-            ("slow", Some("sleep 30 & sleep 30")),
+            // A long command, then cancelled: a background job and a foreground one on Unix.
+            ("slow", Some(if cfg!(windows) { "ping -n 30 127.0.0.1 >nul" } else { "sleep 30 & sleep 30" })),
         ] {
             add_step(state(), task.id.clone(), title.into(), cmd.map(String::from)).unwrap();
         }
@@ -669,7 +669,6 @@ mod tests {
         assert!(cancel_task(state(), task.id.clone()).is_err(), "run handle must be released");
     }
 
-    #[cfg(unix)]
     #[test]
     fn failing_command_fails_the_task() {
         use std::time::Duration;
@@ -678,7 +677,13 @@ mod tests {
         let handle = app.handle().clone();
         let state = || handle.state::<AppState>();
         let task = create_task(state(), "fail".into(), String::new(), None).unwrap();
-        add_step(state(), task.id.clone(), "bad".into(), Some("echo boom; exit 3".into())).unwrap();
+        add_step(
+            state(),
+            task.id.clone(),
+            "bad".into(),
+            Some(if cfg!(windows) { "echo boom & exit 3" } else { "echo boom; exit 3" }.into()),
+        )
+        .unwrap();
         add_step(state(), task.id.clone(), "after".into(), Some("echo no".into())).unwrap();
         run_task(handle.clone(), state(), task.id.clone()).unwrap();
         let mut approved = false;

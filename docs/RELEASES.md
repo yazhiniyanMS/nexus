@@ -45,16 +45,36 @@ Never commit certificates, keys or passwords. Do not describe a build as signed 
 
 ## Verification status
 
-What has actually been checked for 0.1.0. The four columns are different things and are not interchangeable.
+What has actually been checked for 0.1.0. The columns are different kinds of evidence and are not interchangeable: "installed and launched" means a script installed the package, started the app with an empty data folder and confirmed it stayed up and created its database. Nobody looked at the window.
 
-| Platform | Compiled | Automated tests | Installed and launched | GUI verified by a person |
+| Platform | Compiled and packaged | Automated tests | Installed and launched | Looked at by a person |
 | --- | --- | --- | --- | --- |
-| macOS Apple Silicon | Yes (local) | Yes (local, 151 Rust and 21 frontend tests) | Yes (local: app copied out of the `.dmg` and launched by the launch check) | Partly: welcome, Intelligence, Git, Terminal, Model Lab runtimes, Agents overview and About dialog were looked at in a debug build after the redesign; the full feature suite was not rerun |
-| macOS Intel | Yes (local, cross-compiled and packaged as `.dmg`) | No | Launched once under Rosetta on Apple Silicon by the launch check; never on an Intel Mac | No |
-| Windows x64 | Type-checked only, on macOS with a cross-compiler (`x86_64-pc-windows-gnu`) | Pending first CI run | Pending first CI run | **No** |
-| Linux x64 | Pending first CI run | Pending first CI run | Pending first CI run | **No** |
+| macOS Apple Silicon | Yes (local) | Yes (local, all Rust and frontend tests) | Yes (local: app copied out of the `.dmg`) | Partly: welcome, Intelligence, Git, Terminal, Model Lab runtimes, Agents overview and About dialog, in a debug build after the redesign |
+| macOS Intel | Yes (local, cross-compiled `.dmg`) | No | Launched under Rosetta only | No |
+| Windows x64 | Yes, CI (`windows-latest`): NSIS `-setup.exe` and `.msi` | Yes, CI: Rust and frontend tests (see coverage note) | Yes, CI: built binary launched; NSIS installer run silently, installed app launched, uninstaller run. The `.msi` was built but not installed. | **No** |
+| Linux x64 | Yes, CI (`ubuntu-22.04`): `.deb`, `.rpm`, `.AppImage` | Yes, CI: Rust and frontend tests | Yes, CI: built binary and installed `.deb` launched under a virtual display, `.deb` removed again. The `.rpm` and `.AppImage` were built but not installed or run. | **No** |
 
-No Windows or Linux virtual machine was available during development; the only route to those systems is GitHub's native runners, which first run when the repository is pushed. Update this table from the workflow results before publishing a release.
+Evidence: CI run [43999204319](https://github.com/yazhiniyanMS/nexus/actions/runs/43999204319) on commit `4a04aa9` (private repository); the coverage changes since then are in the next run on `main`.
+
+### Coverage differences
+
+- **Windows:** tests that drive real shells use Command Prompt or PowerShell (ConPTY terminals, exit codes, resize, stopping a running program, PowerShell input). Still Unix-only, because their fixtures are shell scripts: the end-to-end agent workflow tests (10), the managed model-server process tests (3), the executable-bit check for runtime binaries, the login-shell `PATH` test and three Unix terminal tests (background jobs, `stty` resize, search with colour codes). The agent code paths they cover (worktrees, diffs, apply, line endings) are partly covered on Windows by the workspace tests.
+- **Linux:** every test that runs on macOS runs on Linux.
+
+### Problems found by the first CI runs, and fixed
+
+| Platform | Problem | Fix |
+| --- | --- | --- |
+| Windows, Linux | `node --test tests/` fails with Node 24 (folder taken as a module) | Test files passed as a glob |
+| Windows | Rust test executable crashed on load (`STATUS_ENTRYPOINT_NOT_FOUND`): the Common Controls manifest was only in the app | Manifest embedded by the linker into every executable |
+| Windows | Terminals produced no output: ConPTY waits for an answer to its start-up cursor query, and the screen ignores queries found in replayed output | The core answers that first query |
+| Windows | `git worktree add` failed on a `\\?\C:\…` path | Git is given the plain path |
+| Windows | Agent tests assumed LF checkouts; Git for Windows uses CRLF | Tests compare content; a new test checks CRLF checkouts keep CRLF after an apply |
+
+### Known limits found in CI
+
+- **Linux without a D-Bus session bus:** the app takes about 30 seconds to start (a D-Bus timeout); inside a session bus, as on any desktop, it starts in under a second. Affects minimal window managers or containers started without `dbus-run-session`.
+- Windows SmartScreen and macOS Gatekeeper warnings: installers are unsigned.
 
 ## Upgrades
 

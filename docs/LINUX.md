@@ -1,6 +1,6 @@
 # NEXUS on Linux
 
-Linux support is new in the 0.1.0 beta and is built and checked on **Ubuntu 22.04 (x86-64) only**. Other distributions may work but are untested; see [RELEASES.md](RELEASES.md#verification-status).
+Linux support is new in the 0.1.0 beta and is built and checked on **Ubuntu 22.04 (x86-64) only**: CI builds all three packages, runs every test, and installs, launches and removes the `.deb`. Other distributions may work but are untested; see [RELEASES.md](RELEASES.md#verification-status).
 
 ## Required system libraries
 
@@ -33,6 +33,8 @@ glibc 2.35 or later is required because the packages are built on Ubuntu 22.04. 
 - Only x86-64 is built. ARM64 Linux is not built or tested.
 - Tested on Ubuntu 22.04 with X11 through a virtual display in CI. Wayland, other desktops and other distributions have not been checked by us.
 - On some NVIDIA and Wayland setups WebKitGTK shows a blank window; starting NEXUS with `WEBKIT_DISABLE_DMABUF_RENDERER=1` is the usual workaround.
+- Without a D-Bus session bus (some minimal window managers, containers) NEXUS takes about 30 seconds to start. Start it with `dbus-run-session nexus` in that case.
+- The `.rpm` and `.AppImage` are built in CI but have not been installed or run there; only the `.deb` has.
 - The AppImage needs FUSE 2 (`libfuse2`) or `--appimage-extract-and-run`.
 
 ## Reporting Linux problems
