@@ -249,6 +249,34 @@ pub mod tests {
         fs::remove_dir_all(&outside).unwrap();
     }
 
+    /// File contents with line endings as stored in Git. With `core.autocrlf=true` (the Git for
+    /// Windows default) checkouts use CRLF; content is what these tests compare.
+    fn text(path: &Path) -> String {
+        fs::read_to_string(path).unwrap().replace("\r\n", "\n")
+    }
+
+    /// A user whose Git checks files out with CRLF keeps CRLF after an agent's change is applied,
+    /// and the change itself arrives intact.
+    #[test]
+    fn applying_keeps_the_projects_own_line_endings() {
+        let project = repo(&[("a.txt", "one\ntwo\nthree\n")]);
+        git(&project, &["config", "core.autocrlf", "true"]).unwrap();
+        fs::remove_file(project.join("a.txt")).unwrap();
+        git(&project, &["checkout", "--", "a.txt"]).unwrap();
+        assert_eq!(fs::read_to_string(project.join("a.txt")).unwrap(), "one\r\ntwo\r\nthree\r\n", "checkout uses CRLF");
+
+        let ws = project.parent().unwrap().join(format!("ws-{}", crate::db::new_id()));
+        create(&project, &ws).unwrap();
+        write_file(&ws, "a.txt", "one\nTWO\nthree\n").unwrap();
+        let d = diff(&ws).unwrap();
+        assert_eq!(d.files, [ChangedFile { status: "modified".into(), path: "a.txt".into() }], "only the real change is reported");
+        apply(&project, &d.patch, &ws.parent().unwrap().join("scratch")).unwrap();
+        assert_eq!(fs::read_to_string(project.join("a.txt")).unwrap(), "one\r\nTWO\r\nthree\r\n");
+
+        remove(&project, &ws);
+        fs::remove_dir_all(&project).unwrap();
+    }
+
     #[test]
     fn worktree_is_isolated_and_apply_is_all_or_nothing() {
         let project = repo(&[("a.txt", "one\ntwo\nthree\n"), ("keep.txt", "mine\n")]);
@@ -258,11 +286,7 @@ pub mod tests {
 
         let base = create(&project, &ws).unwrap();
         assert_eq!(base.len(), 40);
-        assert_eq!(
-            fs::read_to_string(ws.join("keep.txt")).unwrap(),
-            "mine\n",
-            "workspace starts from the commit, not from uncommitted edits"
-        );
+        assert_eq!(text(&ws.join("keep.txt")), "mine\n", "workspace starts from the commit, not from uncommitted edits");
 
         write_file(&ws, "a.txt", "one\nTWO\nthree\n").unwrap();
         write_file(&ws, "new.txt", "hello\n").unwrap();
@@ -274,13 +298,13 @@ pub mod tests {
                 ChangedFile { status: "added".into(), path: "new.txt".into() }
             ]
         );
-        assert_eq!(fs::read_to_string(project.join("a.txt")).unwrap(), "one\ntwo\nthree\n", "project untouched before apply");
+        assert_eq!(text(&project.join("a.txt")), "one\ntwo\nthree\n", "project untouched before apply");
         assert!(!project.join("new.txt").exists());
 
         apply(&project, &d.patch, &ws.parent().unwrap().join("scratch")).unwrap();
-        assert_eq!(fs::read_to_string(project.join("a.txt")).unwrap(), "one\nTWO\nthree\n");
-        assert_eq!(fs::read_to_string(project.join("new.txt")).unwrap(), "hello\n");
-        assert_eq!(fs::read_to_string(project.join("keep.txt")).unwrap(), "mine, edited but not committed\n", "user's edits survive");
+        assert_eq!(text(&project.join("a.txt")), "one\nTWO\nthree\n");
+        assert_eq!(text(&project.join("new.txt")), "hello\n");
+        assert_eq!(text(&project.join("keep.txt")), "mine, edited but not committed\n", "user's edits survive");
         assert!(git(&project, &["diff", "--cached", "--name-only"]).unwrap().trim().is_empty(), "nothing is staged or committed");
 
         // A second patch that collides with a local edit must change nothing.
@@ -289,7 +313,7 @@ pub mod tests {
         write_file(&ws, "second.txt", "x\n").unwrap();
         let err = apply(&project, &diff(&ws).unwrap().patch, &ws.parent().unwrap().join("scratch")).unwrap_err().to_string();
         assert!(err.contains("nothing was changed"), "{err}");
-        assert_eq!(fs::read_to_string(project.join("a.txt")).unwrap(), "completely different local edit\n");
+        assert_eq!(text(&project.join("a.txt")), "completely different local edit\n");
         assert!(!project.join("second.txt").exists(), "a failed apply must not partially apply");
 
         remove(&project, &ws);

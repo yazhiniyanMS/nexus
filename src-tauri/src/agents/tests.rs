@@ -140,7 +140,8 @@ impl Harness {
     }
 
     fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.project.join(path)).unwrap_or_else(|_| "<missing>".into())
+        // Line endings as stored in Git: checkouts may use CRLF (core.autocrlf on Windows).
+        fs::read_to_string(self.project.join(path)).map(|t| t.replace("\r\n", "\n")).unwrap_or_else(|_| "<missing>".into())
     }
 
     fn workspace(&self, run: &str) -> PathBuf {
@@ -181,7 +182,7 @@ fn full_workflow_needs_every_approval_and_never_touches_the_project_early() {
     let command = h.gate(&run, "command");
     assert!(command.detail.contains("grep -q NEXUS") && command.detail.contains("\"source\":\"ai\""));
     assert_eq!(command.output, "");
-    assert_eq!(fs::read_to_string(h.workspace(&run).join("src/greet.rs")).unwrap(), CHANGED);
+    assert_eq!(fs::read_to_string(h.workspace(&run).join("src/greet.rs")).unwrap().replace("\r\n", "\n"), CHANGED);
     assert_eq!(h.read("src/greet.rs"), ORIGINAL, "project untouched while the workspace changes");
     assert_eq!(h.read("docs/NOTES.md"), "<missing>");
     h.decide(&run, &command, true);
