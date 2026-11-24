@@ -57,11 +57,12 @@ gh repo edit yazhiniyanMS/nexus --enable-discussions
 
 ## 6. Labels
 
-The repository already has `bug`, `enhancement`, `documentation`, `good first issue`, `help wanted` and `accessibility`. Two more help triage:
+The repository already has `bug`, `enhancement`, `documentation`, `good first issue`, `help wanted` and `accessibility`. The issue templates also apply `installation`, `windows`, `linux`, `platform-report`, `ux` and `performance`, which do not exist yet, so GitHub drops them. Create them:
 
 ```bash
-gh label create platform:windows --color 0e8a16 --description "Specific to Windows" -R yazhiniyanMS/nexus
-gh label create platform:linux --color 0e8a16 --description "Specific to Linux" -R yazhiniyanMS/nexus
+for l in "installation:Did not install or start" "windows:Specific to Windows" "linux:Specific to Linux" "platform-report:How NEXUS runs on a system" "ux:Confusing or hard to use" "performance:Slow or heavy"; do
+  gh label create "${l%%:*}" --description "${l#*:}" --color 0e8a16 -R yazhiniyanMS/nexus
+done
 ```
 
 ## 7. Release 0.2.0 (after CI passes)

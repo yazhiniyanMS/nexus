@@ -71,3 +71,5 @@ ol.steps { color: var(--dim); padding-left: 20px; margin: 0 0 24px; max-width: 4
 ol.steps li { margin: 8px 0; }
 ol.steps b { color: var(--ink); }
 @media (max-width: 820px) { .feature { grid-template-columns: 1fr; gap: 16px; } }
+.notice { margin-top: 6px; max-width: 46em; }
+.notice b { color: var(--ink); }

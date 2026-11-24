@@ -127,6 +127,16 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Next: ship 0.2.0 with the report, guided setup and sandboxing; verify Windows and Linux hands-on; signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## Feedback
+
+Everything goes through public GitHub issues — no external forms and no tracking:
+[it did not install](https://github.com/yazhiniyanMS/nexus/issues/new?template=installation_problem.yml) ·
+[how it runs on my system](https://github.com/yazhiniyanMS/nexus/issues/new?template=platform_report.yml) ·
+[something is broken](https://github.com/yazhiniyanMS/nexus/issues/new?template=bug_report.yml) ·
+[something was confusing](https://github.com/yazhiniyanMS/nexus/issues/new?template=ux_feedback.yml) ·
+[I need a feature](https://github.com/yazhiniyanMS/nexus/issues/new?template=feature_request.yml).
+Reports from Windows and Linux are the most useful thing you can send right now.
+
 ## Contributing
 
 Bug reports, platform testing (especially Windows and Linux) and pull requests are welcome. Start with [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — it covers setup, the checks to run, and how the codebase is organised. Please follow the [code of conduct](CODE_OF_CONDUCT.md).
