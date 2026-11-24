@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Activity, Bot, Command as CommandIcon, LifeBuoy, FlaskConical, FolderGit2, GitBranch, LayoutDashboard, ListChecks, Network, Search, TerminalSquare, Workflow } from "lucide-react";
+import { Activity, Bot, Command as CommandIcon, LifeBuoy, FlaskConical, FolderGit2, GitBranch, LayoutDashboard, ListChecks, Network, Search, Settings as SettingsIcon, TerminalSquare, Workflow } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AboutDialog } from "./components/AboutDialog";
 import { CommandPalette, type Command } from "./components/CommandPalette";
@@ -13,7 +13,6 @@ import { fromTerminal, isMac, modPressed, shortcut } from "./lib/platform";
 import { errorText } from "./lib/util";
 import ActivityView from "./views/Activity";
 import AgentsView from "./views/Agents";
-import AIView from "./views/AI";
 import Dashboard from "./views/Dashboard";
 import GitView from "./views/GitView";
 import SearchView from "./views/Search";
@@ -25,24 +24,24 @@ const IntelligenceView = lazy(() => import("./views/Intelligence"));
 // The terminal emulator is only needed on its own screen.
 const TerminalView = lazy(() => import("./views/Terminal"));
 const ModelLabView = lazy(() => import("./views/ModelLab"));
+const SettingsView = lazy(() => import("./views/Settings"));
 
-export type ViewId = "dashboard" | "projects" | "intel" | "agents" | "terminal" | "models" | "search" | "git" | "tasks" | "ai" | "activity";
+export type ViewId = "dashboard" | "projects" | "intel" | "agents" | "terminal" | "models" | "search" | "git" | "tasks" | "activity" | "settings";
 export interface PeekTarget { projectId: string; path: string; line?: number }
 
 // Order defines the Ctrl/Cmd+1…9 shortcuts; screens after the ninth have none.
-// `ai` marks intelligence and model screens, which use the lavender accent.
-const NAV: { id: ViewId; label: string; icon: typeof Bot; ai?: boolean }[] = [
-  { id: "dashboard", label: "Overview", icon: LayoutDashboard },
-  { id: "projects", label: "Projects", icon: FolderGit2 },
-  { id: "intel", label: "Intelligence", icon: Network, ai: true },
-  { id: "agents", label: "Agents", icon: Workflow, ai: true },
-  { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "models", label: "Model Lab", icon: FlaskConical, ai: true },
-  { id: "search", label: "Search", icon: Search },
-  { id: "git", label: "Git", icon: GitBranch },
-  { id: "tasks", label: "Tasks", icon: ListChecks },
-  { id: "ai", label: "AI Workspace", icon: Bot, ai: true },
-  { id: "activity", label: "Activity", icon: Activity },
+// Grouped by job. `ai` marks intelligence and model screens, which use the lavender accent.
+const NAV: { id: ViewId; label: string; icon: typeof Bot; group: string; ai?: boolean }[] = [
+  { id: "dashboard", label: "Overview", icon: LayoutDashboard, group: "Workspace" },
+  { id: "projects", label: "Projects", icon: FolderGit2, group: "Workspace" },
+  { id: "search", label: "Search", icon: Search, group: "Workspace" },
+  { id: "git", label: "Git", icon: GitBranch, group: "Workspace" },
+  { id: "terminal", label: "Terminal", icon: TerminalSquare, group: "Workspace" },
+  { id: "tasks", label: "Tasks", icon: ListChecks, group: "Automation" },
+  { id: "agents", label: "Agents", icon: Workflow, group: "Automation", ai: true },
+  { id: "intel", label: "Intelligence", icon: Network, group: "Models", ai: true },
+  { id: "models", label: "Model Lab", icon: FlaskConical, group: "Models", ai: true },
+  { id: "activity", label: "Activity", icon: Activity, group: "" },
 ];
 
 /** Shared app state handed to every view. */
@@ -63,7 +62,16 @@ export interface Workspace {
 
 
 export default function App() {
-  const [view, setView] = useState<ViewId>("dashboard");
+  const [view, setViewState] = useState<ViewId>("dashboard");
+  const setView = useCallback((v: ViewId) => {
+    setViewState(v);
+    void api.appPrefsSetLastView(v).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    api.appPrefs().then((p) => {
+      if (p.start_view === "last" && p.last_view) setViewState(p.last_view as ViewId);
+    }).catch(() => undefined);
+  }, []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string | null>(() => localStorage.getItem("nexus.project"));
   const [fatal, setFatal] = useState<string>();
@@ -120,6 +128,9 @@ export default function App() {
       if (paletteAlt || (mod && e.key.toLowerCase() === "k")) {
         e.preventDefault();
         setPalette((p) => !p);
+      } else if (mod && e.key === ",") {
+        e.preventDefault();
+        setView("settings");
       } else if (mod && /^[1-9]$/.test(e.key) && NAV[Number(e.key) - 1]) {
         e.preventDefault();
         setView(NAV[Number(e.key) - 1].id);
@@ -162,9 +173,9 @@ export default function App() {
   return (
     <div className="relative flex h-full">
       <nav className="flex w-52 shrink-0 flex-col border-r border-line bg-panel">
-        <div className="flex h-14 shrink-0 items-center gap-2.5 px-4">
-          <div className="grid size-6 place-items-center rounded-md bg-accent text-[13px] font-black text-black">N</div>
-          <span className="text-[15px] font-semibold tracking-wide">NEXUS</span>
+        <div className="flex h-11 shrink-0 items-center gap-2.5 px-4">
+          <div className="grid size-6 place-items-center rounded-md bg-accent text-sm font-black text-black">N</div>
+          <span className="text-md font-semibold tracking-wide">NEXUS</span>
         </div>
         <div className="space-y-2 px-2 pb-3">
           {projects.length > 0 && <ProjectPicker ws={ws} className="w-full" />}
@@ -173,33 +184,44 @@ export default function App() {
             className="flex h-8 w-full items-center gap-2 rounded-md border border-line bg-bg px-2.5 text-xs text-faint hover:text-dim"
           >
             <CommandIcon size={12} /> Search or run…
-            <kbd className="ml-auto font-sans text-[11px]">{shortcut("K")}</kbd>
+            <kbd className="ml-auto font-sans text-2xs">{shortcut("K")}</kbd>
           </button>
         </div>
         <div className="flex-1 space-y-0.5 overflow-auto px-2">
-          {NAV.map(({ id, label, icon: Icon, ai }, i) => (
+          {NAV.map(({ id, label, icon: Icon, ai, group }, i) => (
+            <div key={id}>
+            {group && (i === 0 || NAV[i - 1].group !== group) && <div className="px-2.5 pt-3 pb-1 text-2xs font-medium text-faint">{group}</div>}
+            {!group && <div className="my-2 border-t border-line" />}
             <button
-              key={id}
               onClick={() => setView(id)}
+              aria-current={view === id ? "page" : undefined}
               title={i < 9 ? `${label} (${shortcut(String(i + 1))})` : label}
               className={clsx(
-                "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium",
+                "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-sm font-medium",
                 view === id ? "bg-raised text-ink" : "text-dim hover:bg-raised/60 hover:text-ink",
               )}
             >
               <Icon size={15} className={view === id ? (ai ? "text-lav" : "text-accent") : undefined} />
               {label}
             </button>
+            </div>
           ))}
         </div>
         <div className="border-t border-line p-2">
           <button
+            onClick={() => setView("settings")}
+            aria-current={view === "settings" ? "page" : undefined}
+            title={`Settings (${shortcut(",")})`}
+            className={clsx("flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-sm font-medium", view === "settings" ? "bg-raised text-ink" : "text-dim hover:bg-raised/60 hover:text-ink")}
+          >
+            <SettingsIcon size={15} /> Settings
+          </button>
+          <button
             onClick={() => setAbout(true)}
-            className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium text-dim hover:bg-raised/60 hover:text-ink"
+            className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-sm font-medium text-dim hover:bg-raised/60 hover:text-ink"
           >
             <LifeBuoy size={15} /> About &amp; feedback
           </button>
-          <div className="px-2.5 pt-1.5 pb-1 text-[11px] leading-relaxed text-faint">Local-first. Your code and data stay on this machine.</div>
         </div>
       </nav>
       <main className="relative flex min-w-0 flex-1 flex-col">
@@ -221,7 +243,7 @@ export default function App() {
             {view === "search" && <SearchView ws={ws} />}
             {view === "git" && <GitView ws={ws} />}
             {view === "tasks" && <TasksView ws={ws} />}
-            {view === "ai" && <AIView ws={ws} />}
+            {view === "settings" && <SettingsView ws={ws} views={NAV} onAbout={() => setAbout(true)} />}
             {view === "activity" && <ActivityView />}
           </Suspense>
         )}

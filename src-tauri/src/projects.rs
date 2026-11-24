@@ -189,6 +189,13 @@ fn secret_patterns() -> &'static [(Regex, &'static str)] {
     })
 }
 
+/// Replace recognisable credentials with `[redacted]` in text a model only reads (questions,
+/// research, review). Text a model must reproduce (the Developer's files) goes through
+/// [`crate::secrets::Vault`] instead, which restores the values afterwards.
+pub fn mask_secrets(text: &str) -> String {
+    crate::secrets::mask(text)
+}
+
 fn marker_pattern() -> &'static Regex {
     static P: OnceLock<Regex> = OnceLock::new();
     P.get_or_init(|| Regex::new(r"\b(TODO|FIXME|HACK|XXX)\b").unwrap())
@@ -487,9 +494,9 @@ pub fn analyze(root: &Path) -> Analysis {
     sink.issues.sort_by_key(|i| rank(&i.severity));
 
     let mut languages: Vec<LanguageStat> = langs.into_values().collect();
-    languages.sort_by(|x, y| y.lines.cmp(&x.lines));
+    languages.sort_by_key(|l| std::cmp::Reverse(l.lines));
     let mut top_dirs: Vec<DirStat> = dirs.into_iter().map(|(name, files)| DirStat { name, files }).collect();
-    top_dirs.sort_by(|x, y| y.files.cmp(&x.files));
+    top_dirs.sort_by_key(|d| std::cmp::Reverse(d.files));
     top_dirs.truncate(12);
 
     a.languages = languages;
@@ -619,13 +626,36 @@ pub async fn add_project(state: State<'_, AppState>, path: String) -> Result<Pro
 
 #[tauri::command]
 pub fn remove_project(state: State<'_, AppState>, id: String) -> Result<()> {
+    remove(&state, &id)
+}
+
+/// Forget a project. Its files are never touched. Agent work still running in it must be
+/// cancelled first: deleting its records under a running agent would leave the agent writing to
+/// rows that no longer exist and its workspace folder behind. Its terminals are stopped.
+pub(crate) fn remove(state: &AppState, id: &str) -> Result<()> {
+    let runs: Vec<(String, String)> = state
+        .db
+        .conn()
+        .prepare("SELECT id, status FROM agent_runs WHERE project_id = ?1")?
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    if runs.iter().any(|(run, status)| state.agents.is_active(run) || matches!(status.as_str(), "queued" | "running" | "paused")) {
+        return Err("An agent task is still running in this project. Cancel it in Agents, then remove the project.".into());
+    }
+    // Agent workspaces are Git worktrees registered in the project's repository; remove them
+    // while the project's path is still known.
+    for (run, _) in &runs {
+        crate::agents::engine::discard_workspace(state, run);
+    }
     let conn = state.db.conn();
-    let name: Option<String> = conn.query_row("SELECT name FROM projects WHERE id = ?1", [&id], |r| r.get(0)).optional()?;
-    conn.execute("DELETE FROM projects WHERE id = ?1", [&id])?;
+    let name: Option<String> = conn.query_row("SELECT name FROM projects WHERE id = ?1", [id], |r| r.get(0)).optional()?;
+    conn.execute("DELETE FROM projects WHERE id = ?1", [id])?;
     if let Some(name) = name {
         activity::log(&conn, "project", &format!("Removed project {name} (files untouched)"), None);
     }
-    Ok(())
+    drop(conn);
+    // Shells opened in the project lost their records with it; stop them now rather than later.
+    crate::terminal::stop_orphans(state)
 }
 
 #[tauri::command]
@@ -737,6 +767,65 @@ pub mod tests {
             fs::write(p, content).unwrap();
         }
         dir
+    }
+
+    /// Removing a project with a finished agent task removes that task's worktree from disk and
+    /// from the repository's worktree list; with a task still running, nothing is removed.
+    #[test]
+    fn removing_a_project_cleans_up_agent_workspaces_and_refuses_while_work_runs() {
+        let state = AppState::for_tests();
+        let project = crate::agents::workspace::tests::repo(&[("a.txt", "one\n")]);
+        let conn = || state.db.conn();
+        conn().execute("INSERT INTO projects (id, name, path, added_at) VALUES ('p', 'P', ?1, 'x')", [project.to_string_lossy()]).unwrap();
+        let worktree = state.data_dir.join("workspaces").join("run1");
+        crate::agents::workspace::create(&project, &worktree).unwrap();
+        let add_run = |id: &str, status: &str, tree: Option<&Path>| {
+            conn()
+                .execute(
+                    "INSERT INTO agent_runs (id, project_id, title, outcome, provider_id, status, worktree, created_at, updated_at)
+                     VALUES (?1, 'p', 't', 'o', 'x', ?2, ?3, 'x', 'x')",
+                    params![id, status, tree.map(|t| t.to_string_lossy().into_owned())],
+                )
+                .unwrap();
+        };
+        add_run("run1", "failed", Some(&worktree));
+        add_run("run2", "running", None);
+
+        let err = remove(&state, "p").unwrap_err().to_string();
+        assert!(err.contains("agent task is still running"), "{err}");
+        assert!(worktree.is_dir(), "nothing is removed while work runs");
+        let count = |sql: &str| -> i64 { conn().query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM projects"), 1);
+
+        conn().execute("UPDATE agent_runs SET status = 'cancelled' WHERE id = 'run2'", []).unwrap();
+        remove(&state, "p").unwrap();
+        assert!(!worktree.exists(), "the agent workspace is deleted");
+        let listed = crate::git::git(&project, &["worktree", "list", "--porcelain"]).unwrap();
+        assert_eq!(listed.matches("worktree ").count(), 1, "only the project itself remains: {listed}");
+        assert_eq!(count("SELECT COUNT(*) FROM agent_runs"), 0);
+        assert!(project.join("a.txt").exists(), "project files are untouched");
+        fs::remove_dir_all(&project).unwrap();
+    }
+
+    #[test]
+    fn credentials_are_masked_before_text_goes_to_a_model() {
+        let aws = format!("AKIA{}", "Z".repeat(16));
+        let gh = format!("ghp_{}", "a1".repeat(18));
+        let text = format!(
+            "API_KEY = \"{}\"\nconst password: &str = \"hunter2hunter2\";\nlet aws = \"{aws}\";\ntoken {gh} here\n\
+             {}\nabc\ndef\n{}\nfn keep() {{ let api_key = read(); }}\n",
+            "Zq3x".repeat(8),
+            crate::secrets::tests::pem("BEGIN"),
+            crate::secrets::tests::pem("END"),
+        );
+        let masked = mask_secrets(&text);
+        for secret in ["Zq3xZq3x", "hunter2", aws.as_str(), gh.as_str(), "abc\ndef"] {
+            assert!(!masked.contains(secret), "{secret} survived:\n{masked}");
+        }
+        assert!(masked.contains("API_KEY = \"[redacted]\""), "{masked}");
+        assert!(masked.contains("[private key redacted]"));
+        assert!(masked.contains("fn keep() { let api_key = read(); }"), "ordinary code is untouched");
+        assert_eq!(mask_secrets("let total = price * 2;"), "let total = price * 2;");
     }
 
     #[test]

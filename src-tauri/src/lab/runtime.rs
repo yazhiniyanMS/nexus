@@ -9,7 +9,7 @@
 
 use crate::ai::{self, Provider};
 use crate::error::{AppError, Result};
-use crate::{activity, db, jobs, platform, AppState};
+use crate::{activity, db, platform, AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
@@ -234,6 +234,8 @@ pub(crate) fn find_binary(name: &str, dirs: &[PathBuf], extra: &[PathBuf]) -> Op
     platform::programs::find_in(name, dirs, extra)
 }
 
+// Which entries are pushed depends on the platform, so this cannot be a `vec![...]`.
+#[allow(clippy::vec_init_then_push)]
 fn ollama_binary() -> Option<PathBuf> {
     let mut extra = vec![];
     #[cfg(target_os = "macos")]
@@ -290,7 +292,7 @@ async fn get_json(state: &AppState, provider: Option<&Provider>, url: String) ->
     };
     let resp = req.send().await.ok()?;
     let status = resp.status().as_u16();
-    Some((status, resp.json::<Value>().await.unwrap_or(Value::Null)))
+    Some((status, serde_json::from_str(&ai::read_body_prefix(resp, ai::MAX_JSON_BYTES).await).unwrap_or(Value::Null)))
 }
 
 /// Ask an address whether the expected kind of server is answering there.
@@ -407,6 +409,7 @@ const OPENAI_SETUP: &[SetupStep] = &[
 pub async fn detect(state: &AppState) -> Result<Vec<RuntimeStatus>> {
     let providers = ai::all_providers(state)?;
     let managed = state.lab.runtimes.list();
+    #[allow(clippy::type_complexity)] // a local table of rows, read once below
     let groups: [(&'static str, &'static str, &'static str, Option<PathBuf>, &[&str], &'static [SetupStep], bool); 3] = [
         ("ollama", "Ollama", "ollama", ollama_binary(), &["http://localhost:11434"], OLLAMA_SETUP, true),
         // 8080 is llama-server's long-standing default port; newer builds document 9931.
@@ -529,6 +532,10 @@ pub(crate) async fn start_process<R: Runtime>(app: &AppHandle<R>, spec: &StartSp
     let mut args: Vec<String> = vec![];
     let mut model = None;
     let mut cmd = tokio::process::Command::new(binary);
+    // The server needs neither this app's test hook nor any credentials from the environment;
+    // the Trusted policy removes both while keeping its own settings (OLLAMA_MODELS, …). This is
+    // set first so the server's own variables below are added on top.
+    cmd.env_clear().envs(crate::exec::env::build(crate::exec::Level::Trusted, &[]));
     match spec.runtime.as_str() {
         "ollama" => {
             args.push("serve".into());
@@ -559,13 +566,6 @@ pub(crate) async fn start_process<R: Runtime>(app: &AppHandle<R>, spec: &StartSp
         _ => return Err("NEXUS can only start Ollama and llama.cpp servers".into()),
     }
     cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
-    // The server does not need this app's test hook or any credentials from the environment.
-    cmd.env_remove("NEXUS_E2E_PORT");
-    for (name, _) in std::env::vars_os() {
-        if jobs::is_secret_env(&name.to_string_lossy()) {
-            cmd.env_remove(&name);
-        }
-    }
     platform::process::detach_tree(&mut cmd);
 
     let mut child = cmd.spawn().map_err(|e| AppError::Msg(format!("Could not start {}: {e}", binary.display())))?;

@@ -61,7 +61,7 @@ fn search_file(re: &regex::Regex, file: &Path, mut on_match: impl FnMut(u32, &st
     }
 }
 
-fn search_project(re: &regex::Regex, id: &str, name: &str, root: &Path, out: &mut SearchResult) {
+pub(crate) fn search_project(re: &regex::Regex, id: &str, name: &str, root: &Path, out: &mut SearchResult) {
     for entry in walker(root).flatten() {
         if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             continue;

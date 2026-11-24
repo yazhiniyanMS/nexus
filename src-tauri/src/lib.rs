@@ -7,6 +7,7 @@ mod db;
 #[cfg(debug_assertions)]
 mod e2e;
 mod error;
+mod exec;
 mod git;
 mod intel;
 mod jobs;
@@ -14,7 +15,10 @@ mod lab;
 mod platform;
 mod projects;
 mod search;
+mod secrets;
 mod settings;
+#[cfg(test)]
+mod stress_tests;
 mod tasks;
 mod terminal;
 
@@ -43,7 +47,7 @@ impl AppState {
             agents: agents::AgentEngine::default(),
             terminal: terminal::Manager::default(),
             lab: lab::Lab::default(),
-            http: reqwest::Client::new(),
+            http: ai::http_client().unwrap(),
             data_dir,
         }
     }
@@ -58,16 +62,23 @@ pub fn run() {
         .setup(|app| {
             platform::env::warm_up();
             let dir = platform::dirs::data_dir(app.handle())?;
-            let db = db::Db::open(&dir.join("nexus.db"))?;
+            let db = match db::Db::open(&dir.join("nexus.db")) {
+                Ok(db) => db,
+                Err(e) => {
+                    // Without this the app would quit with the reason only on stderr.
+                    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                    app.dialog().message(e.to_string()).title("NEXUS cannot start").kind(MessageDialogKind::Error).blocking_show();
+                    return Err(e.into());
+                }
+            };
             tasks::recover_interrupted(&db)?;
             agents::recover_interrupted(&db)?;
             terminal::recover_interrupted(&db, &dir)?;
             lab::recover_interrupted(&db)?;
             lab::runtime::reap_leftovers(&dir);
-            let http = reqwest::Client::builder()
-                .user_agent(concat!("nexus/", env!("CARGO_PKG_VERSION")))
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .build()?;
+            // Commands a previous run could not stop (it crashed or was killed) are stopped now.
+            jobs::init(&dir);
+            let http = ai::http_client()?;
             app.manage(AppState {
                 db,
                 engine: tasks::Engine::default(),
@@ -96,6 +107,7 @@ pub fn run() {
                         _ = int.recv() => {}
                         _ = hup.recv() => {}
                     }
+                    jobs::stop_all();
                     if let Some(state) = handle.try_state::<AppState>() {
                         lab::shutdown(&state);
                     }
@@ -124,6 +136,7 @@ pub fn run() {
             git::git_show,
             git::git_stage,
             git::git_unstage,
+            git::git_commit,
             intel::rebuild_index,
             intel::index_status,
             intel::search_symbols,
@@ -134,6 +147,7 @@ pub fn run() {
             intel::ask_codebase,
             intel::architecture_doc,
             intel::export_text,
+            intel::save_project_report,
             agents::agent_roles,
             agents::list_agent_runs,
             agents::get_agent_run,
@@ -156,6 +170,13 @@ pub fn run() {
             terminal::term_search,
             terminal::term_layout_get,
             terminal::term_layout_set,
+            settings::app_prefs_get,
+            settings::app_prefs_set_start,
+            settings::app_prefs_set_last_view,
+            settings::onboarding_reset,
+            exec::exec_capabilities,
+            exec::exec_settings_get,
+            exec::exec_settings_set,
             lab::lab_kinds,
             lab::lab_settings_get,
             lab::lab_settings_set,
@@ -215,6 +236,7 @@ pub fn run() {
             tasks::plan_with_ai,
             tasks::run_task,
             tasks::cancel_task,
+            tasks::set_task_timeout,
             tasks::approve_step,
             tasks::reset_task,
             activity::list_activity,
@@ -226,6 +248,9 @@ pub fn run() {
         .run(|app, event| {
             // Stop servers, downloads and requests the Model Lab started before the app goes away.
             if let tauri::RunEvent::Exit = event {
+                // Task and agent commands end with the app; the next start marks their runs
+                // interrupted so they can be resumed.
+                jobs::stop_all();
                 if let Some(state) = app.try_state::<AppState>() {
                     lab::shutdown(&state);
                 }

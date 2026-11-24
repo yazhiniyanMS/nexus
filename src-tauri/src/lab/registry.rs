@@ -373,6 +373,7 @@ fn compatibility(kind: &str, provider_name: Option<&str>, meta: &ModelMeta) -> V
 pub fn list(state: &AppState) -> Result<Vec<ModelRecord>> {
     let providers = ai::all_providers(state)?;
     let dir = storage::dir(state)?;
+    #[allow(clippy::type_complexity)] // rows of columns, destructured right below
     let rows: Vec<(String, Option<String>, String, String, String, bool, bool, String, String)> = {
         let conn = state.db.conn();
         let mut stmt = conn
@@ -429,7 +430,7 @@ pub fn list(state: &AppState) -> Result<Vec<ModelRecord>> {
             last_seen,
         });
     }
-    out.sort_by(|a, b| (!a.favorite, a.model_id.to_lowercase()).cmp(&(!b.favorite, b.model_id.to_lowercase())));
+    out.sort_by_key(|a| (!a.favorite, a.model_id.to_lowercase()));
     Ok(out)
 }
 
@@ -498,7 +499,7 @@ pub async fn remove(state: &AppState, key: &str) -> Result<()> {
     let resp = req.timeout(PROBE_TIMEOUT).send().await.map_err(|e| ai::transport_error(e, &redactor))?;
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
+        let body = ai::read_body_prefix(resp, ai::MAX_ERROR_BYTES).await;
         return Err(ai::error_detail(status, &body, &redactor));
     }
     let conn = state.db.conn();

@@ -11,6 +11,9 @@ use std::path::{Component, Path, PathBuf};
 pub const MAX_CHANGED_FILES: usize = 40;
 pub const MAX_FILE_BYTES: usize = 400_000;
 
+/// Points Git's hook lookup at a folder that cannot exist, so no hook runs.
+const NO_HOOKS: &str = if cfg!(windows) { "core.hooksPath=NUL" } else { "core.hooksPath=/dev/null" };
+
 /// Create a detached worktree of the project's HEAD at `dest`. Returns the base commit.
 pub fn create(project: &Path, dest: &Path) -> Result<String> {
     if git(project, &["rev-parse", "--is-inside-work-tree"]).map(|s| s.trim() != "true").unwrap_or(true) {
@@ -24,7 +27,9 @@ pub fn create(project: &Path, dest: &Path) -> Result<String> {
         fs::create_dir_all(parent)?;
     }
     // Git cannot use Windows verbatim paths (\\?\C:\...), so it is given the plain spelling.
-    git(project, &["worktree", "add", "--detach", &crate::platform::paths::display(dest), &base])?;
+    // Creating a workspace is NEXUS's own bookkeeping, not something the user ran, so the
+    // repository's hooks (post-checkout, for example) are not run for it.
+    git(project, &["-c", NO_HOOKS, "worktree", "add", "--detach", &crate::platform::paths::display(dest), &base])?;
     Ok(base)
 }
 
@@ -81,7 +86,7 @@ pub fn write_file(root: &Path, relative: &str, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
         // Belt and braces: the real parent must still be inside the workspace.
-        if !crate::platform::paths::canonical(parent)?.starts_with(crate::platform::paths::canonical(&root)?) {
+        if !crate::platform::paths::canonical(parent)?.starts_with(crate::platform::paths::canonical(root)?) {
             return Err(AppError::Msg(format!("Refused unsafe path “{relative}”: it resolves outside the workspace")));
         }
     }
@@ -222,6 +227,27 @@ pub mod tests {
         git(&dir, &["add", "-A"]).unwrap();
         git(&dir, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"]).unwrap();
         dir
+    }
+
+    /// Starting an agent task must not run the project's Git hooks.
+    #[cfg(unix)]
+    #[test]
+    fn creating_a_workspace_runs_no_repository_hooks() {
+        use std::os::unix::fs::PermissionsExt;
+        let project = repo(&[("a.txt", "one\n")]);
+        let marker = project.join("hook.marker");
+        let hook = project.join(".git/hooks/post-checkout");
+        fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+        let dest = project.parent().unwrap().join(format!("ws-{}", crate::db::new_id()));
+        create(&project, &dest).unwrap();
+        assert!(dest.join("a.txt").exists());
+        assert!(!marker.exists(), "the post-checkout hook ran");
+        // Control: a plain checkout in the same repository does run it.
+        git(&project, &["checkout", "-q", "-b", "other"]).unwrap();
+        assert!(marker.exists(), "control: the hook should run for an ordinary checkout");
+        remove(&project, &dest);
+        fs::remove_dir_all(&project).unwrap();
     }
 
     #[test]

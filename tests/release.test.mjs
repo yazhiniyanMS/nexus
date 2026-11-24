@@ -43,12 +43,26 @@ test("version files agree, and tags must match them", () => {
   assert.equal(readFileSync("rust-toolchain.toml", "utf8").includes("channel"), true);
 });
 
-test("the website fills in the repository and version and leaves no placeholder", async () => {
-  const { render } = await import("../scripts/build-site.mjs");
-  const html = render(readFileSync("website/index.html", "utf8"), { repo: "example-owner/nexus", version: "0.1.0" });
-  assert.match(html, /https:\/\/github\.com\/example-owner\/nexus\/releases/);
+test("the website fills in the repository, site address and version and leaves no placeholder", async () => {
+  const { render, pagesUrl, sitemap, robots, ASSETS } = await import("../scripts/build-site.mjs");
+  const html = render(readFileSync("website/index.html", "utf8"), { repo: "Example-Owner/nexus", version: "0.1.0" });
+  assert.match(html, /https:\/\/github\.com\/Example-Owner\/nexus\/releases/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/example-owner\.github\.io\/nexus\/">/);
+  assert.match(html, /og:image" content="https:\/\/example-owner\.github\.io\/nexus\/assets\/social-preview\.png"/);
   assert.equal(html.includes("{{"), false);
   assert.throws(() => render("{{REPO_URL}}", { repo: "not a repo", version: "1" }));
-  // Every image the page shows exists in the repository.
-  for (const [, src] of html.matchAll(/<img[^>]+src="([^"]+)"/g)) assert.doesNotThrow(() => readFileSync(`website/${src}`), src);
+  assert.throws(() => render("x", { repo: "a/b", version: "1", site: "http://insecure.example/" }));
+  assert.equal(pagesUrl("A/b"), "https://a.github.io/b/");
+  assert.match(sitemap("https://a.github.io/b/"), /<loc>https:\/\/a\.github\.io\/b\/<\/loc>/);
+  assert.match(robots("https://a.github.io/b/"), /Sitemap: https:\/\/a\.github\.io\/b\/sitemap\.xml/);
+  // The structured data is valid JSON.
+  const ld = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
+  assert.equal(JSON.parse(ld).name, "NEXUS");
+  // Every local file the page uses exists: in website/, or in docs/assets (copied in at build time).
+  const local = [...html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)].map((m) => m[1]);
+  assert.ok(local.length >= 8, "the page shows the screenshots");
+  for (const src of local) {
+    const fromDocs = ASSETS.some((a) => src.startsWith(`assets/${a}`));
+    assert.doesNotThrow(() => readFileSync(fromDocs ? `docs/${src}` : `website/${src}`), src);
+  }
 });

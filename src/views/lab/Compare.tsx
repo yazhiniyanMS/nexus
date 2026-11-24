@@ -20,9 +20,9 @@ function Row({ label, title, cells, best }: { label: string; title?: string; cel
     <tr className="border-t border-line/60 align-top">
       <th className="w-40 py-1.5 pr-3 text-left text-xs font-normal text-faint" title={title}>{label}</th>
       {cells.map((c, i) => (
-        <td key={i} className={clsx("selectable py-1.5 pr-4 text-[13px] break-words", c === UNKNOWN || c === null ? "text-faint" : "text-ink")}>
+        <td key={i} className={clsx("selectable py-1.5 pr-4 text-sm break-words", c === UNKNOWN || c === null ? "text-faint" : "text-ink")}>
           {c ?? UNKNOWN}
-          {best === i && <span className="ml-1.5 text-[11px] text-accent" title="Clearly the best measured value in this row">best</span>}
+          {best === i && <span className="ml-1.5 text-2xs text-accent" title="Clearly the best measured value in this row">best</span>}
         </td>
       ))}
     </tr>
@@ -211,7 +211,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
               <input type="checkbox" className="mt-0.5 accent-accent" checked={selected.includes(m.key)} disabled={!!active || (!selected.includes(m.key) && selected.length >= MAX_MODELS)} onChange={() => toggle(m.key)} />
               <span className="min-w-0">
                 <span className="block truncate font-mono text-xs">{m.model_id}</span>
-                <span className="block truncate text-[11px] text-faint">{m.provider_name ?? "Model folder"} · {m.local ? "local" : "remote"}</span>
+                <span className="block truncate text-2xs text-faint">{m.provider_name ?? "Model folder"} · {m.local ? "local" : "remote"}</span>
               </span>
             </label>
           ))}
@@ -224,7 +224,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
         ) : (
           <div className="mx-auto w-full max-w-6xl space-y-5 p-5">
             <Card className="p-4">
-              <h2 className="text-[13px] font-semibold">Specifications</h2>
+              <h2 className="text-sm font-semibold">Specifications</h2>
               <p className="mt-0.5 text-xs text-dim">As reported by each runtime or read from the model file. A dash means it was not reported.</p>
               <table data-testid="compare-specs" className="mt-2 w-full table-fixed">
                 <thead>
@@ -251,7 +251,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
 
             <Card className="p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[13px] font-semibold">Measured performance</h2>
+                <h2 className="text-sm font-semibold">Measured performance</h2>
                 <Select aria-label="Benchmark to use" className="ml-auto w-80!" value={suiteId} onChange={(e) => setSuiteId(e.target.value)}>
                   <option value="">{completed.length ? "Choose a saved benchmark…" : "No saved benchmark yet"}</option>
                   {completed.map((s) => <option key={s.id} value={s.id}>{s.name} · {timeAgo(s.created_at)}</option>)}
@@ -281,7 +281,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
                     </thead>
                     <tbody>
                       <Row label="First token" title="Median, range and number of runs. Measured by NEXUS." cells={stat((s) => fmtStat(s.ttft_ms, fmtMs))} best={bestOf(summaries.map((s) => s?.ttft_ms), true)} />
-                      <Row label="Generation speed" title="Median tokens per second" cells={stat((s) => <>{fmtStat(s.tokens_per_second, fmtTps)}{s.tps_source && s.tps_source !== "runtime" ? <span className="text-[11px] text-warn"> {s.tps_source}</span> : null}</>)} best={bestOf(summaries.map((s) => s?.tokens_per_second), false)} />
+                      <Row label="Generation speed" title="Median tokens per second" cells={stat((s) => <>{fmtStat(s.tokens_per_second, fmtTps)}{s.tps_source && s.tps_source !== "runtime" ? <span className="text-2xs text-warn"> {s.tps_source}</span> : null}</>)} best={bestOf(summaries.map((s) => s?.tokens_per_second), false)} />
                       <Row label="Total time" cells={stat((s) => fmtStat(s.total_ms, fmtMs))} best={bestOf(summaries.map((s) => s?.total_ms), true)} />
                       <Row label="Prompt processing" cells={stat((s) => fmtStat(s.prompt_eval_ms, fmtMs))} />
                       <Row label="Model load" title="Load time the runtime reported for the first request" cells={stat((s) => fmtMs(s.load_ms))} />
@@ -290,7 +290,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
                       <Row label="Measured runs" cells={stat((s) => `${s.runs}${s.errors ? ` (${s.errors} failed)` : ""}`)} />
                     </tbody>
                   </table>
-                  <p className="mt-2 text-[11px] leading-relaxed text-faint">
+                  <p className="mt-2 text-2xs leading-relaxed text-faint">
                     “Best” appears only where one model's whole range of runs beats every other model's range; overlapping ranges are run-to-run variation, so no model is marked. It is not a quality rating: output quality is not measured here.
                     {!anyMeasured && " None of the selected models has a successful run in this benchmark."}
                     {untested.length > 0 && ` This benchmark also tested ${untested.map((t) => t.model).join(", ")}.`}
@@ -300,10 +300,10 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
             </Card>
 
             <Card className="p-4">
-              <h2 className="text-[13px] font-semibold">Same prompt, side by side</h2>
+              <h2 className="text-sm font-semibold">Same prompt, side by side</h2>
               <p className="mt-0.5 text-xs text-dim">Runs one prompt against each selected model in turn, with your default generation settings ({describeParams(normalizeParams(ctx.settings?.params))}).</p>
               <div className="mt-2 flex items-end gap-2">
-                <textarea aria-label="Comparison prompt" rows={2} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={!!active} placeholder="A prompt to send to every selected model" className="flex-1 resize-y rounded-md border border-line bg-bg p-2 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none" />
+                <textarea aria-label="Comparison prompt" rows={2} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={!!active} placeholder="A prompt to send to every selected model" className="flex-1 resize-y rounded-md border border-line bg-bg p-2 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none" />
                 {active
                   ? <Button variant="danger" onClick={stop}><Square size={12} /> Stop</Button>
                   : <Button variant="primary" disabled={!prompt.trim() || runnable.length === 0 || (remoteHosts.length > 0 && !allowRemote)} onClick={runAll}><Play size={12} /> Run on {runnable.length} model{runnable.length === 1 ? "" : "s"}</Button>}
@@ -314,7 +314,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
                   <span><span className="font-semibold">This leaves your machine.</span> The prompt will be sent to {remoteHosts.join(", ")}. Tick to allow it.</span>
                 </label>
               )}
-              {chosen.length > runnable.length && <p className="mt-2 text-[11px] text-faint">Models that no connected runtime is serving (model files, disabled connections) are skipped.</p>}
+              {chosen.length > runnable.length && <p className="mt-2 text-2xs text-faint">Models that no connected runtime is serving (model files, disabled connections) are skipped.</p>}
               <ErrorBanner message={error} />
               {Object.keys(runs).length > 0 && (
                 <div data-testid="compare-outputs" className="mt-3 grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(runnable.length, MAX_MODELS)}, minmax(0, 1fr))` }}>
@@ -326,8 +326,8 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
                           <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">{m.model_id}</span>
                           {r && <Badge tone={r.status === "done" ? "green" : r.status === "error" ? "red" : r.status === "running" ? "blue" : "neutral"}>{r.status}</Badge>}
                         </div>
-                        {r?.thinking && <div className="mt-1 text-[11px] text-faint">thinking: {r.thinking.length.toLocaleString()} characters</div>}
-                        <div className="selectable mt-2 max-h-80 overflow-auto text-[13px] leading-relaxed break-words whitespace-pre-wrap">{r?.text || (r?.status === "waiting" ? <span className="text-faint">Waiting for its turn…</span> : r?.status === "running" ? <span className="text-faint">Waiting for the first token…</span> : null)}</div>
+                        {r?.thinking && <div className="mt-1 text-2xs text-faint">thinking: {r.thinking.length.toLocaleString()} characters</div>}
+                        <div className="selectable mt-2 max-h-80 overflow-auto text-sm leading-relaxed break-words whitespace-pre-wrap">{r?.text || (r?.status === "waiting" ? <span className="text-faint">Waiting for its turn…</span> : r?.status === "running" ? <span className="text-faint">Waiting for the first token…</span> : null)}</div>
                         {r?.error && <div className="selectable mt-2 text-xs text-danger">{r.error}</div>}
                         {r?.metrics && <MetricsLine metrics={r.metrics} className="mt-2 border-t border-line/60 pt-2" />}
                       </div>

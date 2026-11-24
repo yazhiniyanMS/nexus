@@ -1,123 +1,136 @@
-# NEXUS
+<h1 align="center">NEXUS</h1>
 
-A local-first developer workspace for macOS, Windows and Linux. **Public beta (0.1.0).** Import your repositories, understand them, search them, inspect their Git state, run approved development tasks, and optionally bring an AI provider. Everything except AI requests you make stays on your machine, and the app is fully usable with no AI key.
+<p align="center"><b>Understand a codebase on your own machine — then change it only through you.</b></p>
 
-Built with Tauri 2, React + TypeScript, Rust, SQLite, Tailwind CSS and Monaco.
+<p align="center">
+An open-source desktop workspace for macOS, Windows and Linux. It maps any local project without AI,<br>
+and lets AI agents propose changes in an isolated copy that reach your files only after you approve the diff.
+</p>
 
-## Features
+<p align="center">
+<a href="https://github.com/yazhiniyanMS/nexus/releases">Download</a> ·
+<a href="docs/GETTING_STARTED.md">Get started</a> ·
+<a href="docs/README.md">Documentation</a> ·
+<a href="docs/ROADMAP.md">Roadmap</a> ·
+<a href="https://github.com/yazhiniyanMS/nexus/issues/new/choose">Report a problem</a>
+</p>
 
-| Area | What it does |
+<p align="center">
+<a href="https://github.com/yazhiniyanMS/nexus/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/yazhiniyanMS/nexus?include_prereleases&label=release"></a>
+<a href="https://github.com/yazhiniyanMS/nexus/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yazhiniyanMS/nexus/actions/workflows/ci.yml/badge.svg"></a>
+<a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-blue"></a>
+</p>
+
+<p align="center"><img src="docs/assets/demo/nexus-tour.gif" alt="A tour of NEXUS: welcome, project overview, architecture map, codebase report, Git diff, a task waiting for approval, execution settings and agents" width="900"></p>
+<p align="center"><sub>Real screenshots of NEXUS analysing its own repository.</sub></p>
+
+---
+
+## Why NEXUS
+
+Most AI coding tools start with the agent. NEXUS starts with **understanding**, and puts every change behind your approval.
+
+- **See the shape of a codebase in seconds, with no AI and no API key.** Modules and the imports between them, dependency cycles, the most-imported files, symbols and references, search across all your projects.
+- **Share it without sharing the code.** One click makes a self-contained HTML report — architecture graph, hotspots, dependencies, findings — with file paths and names but no source code. [See a real one](docs/assets/demo/nexus-report.html) (download it and open it in a browser).
+- **Agents that ask first.** An agent researches, plans, writes in a separate Git worktree, runs tests and reviews its own diff. You approve the plan, each command and the final diff; nothing touches your files before that. Commands can run sandboxed, and credentials in the files an agent edits are sent to the model as placeholders.
+- **Your models, measured on your hardware.** Use Ollama, llama.cpp, LM Studio or any OpenAI-compatible server locally, or Anthropic and OpenAI. Model Lab benchmarks them side by side on your machine.
+- **A real workspace around it.** Git status, diffs, staging and commits; your own shell in tabs and splits; approval-gated task lists.
+
+NEXUS is **not an editor**. Keep writing code in VS Code, Zed or your IDE; use NEXUS to understand a project, review what changed and run controlled AI work on it. How it compares with Claude Code, Cursor, Aider and others: [docs/COMPARISON.md](docs/COMPARISON.md).
+
+## Screenshots
+
+| | |
 | --- | --- |
-| **Projects** | Import local folders. Detects languages, frameworks and dependencies (npm, Cargo, pip, Go), summarises the codebase and flags findings: possible secrets, committed `.env` files, oversized files, TODO/FIXME markers, missing README/tests/CI. Browse files in a read-only Monaco viewer. |
-| **Intelligence** | A code index for Rust, TypeScript, JavaScript, Python and Go. Interactive dependency graph and architecture map with cycle detection; ranked symbol search; reference search; per-file connections (imports, used by); source lookup for questions with optional AI answers that cite the files they used; generated architecture document. Works without an AI provider. |
-| **Agents** | Describe an outcome; five specialised agents (Research, Architect, Developer, Testing, Review) carry it out under one orchestration engine. The plan, every command and the final diff each wait for your approval. Work happens in an isolated Git worktree, your uncommitted changes are never touched, and applying is all-or-nothing. Runs are queued, pausable, cancellable, resumable after a crash, and fully logged. Requires an AI provider. |
-| **Terminal** | Your own shell inside each project, in real pseudo-terminals. Tabs, split panes you can drag to resize, process status and exit codes, restart, and search across saved output. The layout is saved per project; output is kept on disk so it survives leaving the screen or reloading. Only what you type is sent to a shell: agents, tasks and AI have no way to write to a terminal. |
-| **Model Lab** | Experimental. Detects local runtimes (Ollama, llama.cpp servers, OpenAI-compatible endpoints) and can start Ollama and llama.cpp servers; lists models with the metadata they report; downloads models only when you ask (Ollama pull, Hugging Face GGUF files with checksum verification); runs prompts with streaming and measured timings; benchmarks and compares models on your hardware; manages connections and defaults used by Intelligence and Agents. See [docs/MODEL_LAB.md](docs/MODEL_LAB.md). |
-| **Search** | File-name and content search (text or regex) across every project. Respects `.gitignore` and skips generated folders. |
-| **Git** | Branch, upstream and ahead/behind; staged, changed and untracked files with diffs; commit history with patches; local and remote branches. Stage and unstage files; these only change the index and never touch files on disk. |
-| **Tasks** | Tasks made of steps. Steps can be suggested from the project's manifests or planned by AI. **Nothing runs without approval**: each command waits for an explicit yes, destructive-looking commands are flagged, output streams live, and a run can be cancelled (the whole process tree is killed). |
-| **AI Workspace** | Optional. Anthropic, OpenAI, any OpenAI-compatible endpoint, Ollama and LM Studio. API keys are stored in the OS keychain, never in the database. Shows token usage and timing. Detects local runtimes and lists their models. |
-| **Activity** | Local log of imports, analyses, executed commands, task results and AI usage. |
+| ![Overview of a project](docs/assets/screenshots/overview.png) **Overview** — repository state, findings and recent work for one project. | ![Architecture map](docs/assets/screenshots/architecture-map.png) **Architecture map** — modules, imports and cycles, built from the code index. |
+| ![Codebase report](docs/assets/screenshots/report.png) **Codebase report** — a shareable HTML file with no source code in it. | ![Git](docs/assets/screenshots/git.png) **Git** — changes, diffs, staging and commits. |
+| ![Task waiting for approval](docs/assets/screenshots/tasks.png) **Tasks** — every command waits for approval and says how it will run. | ![Execution settings](docs/assets/screenshots/execution-settings.png) **Execution** — Trusted, Restricted (sandboxed) or Isolated, described as enforced on your machine. |
 
 ## Install
 
-Download an installer from the releases page: `.dmg` (macOS), `-setup.exe` or `.msi` (Windows), `.AppImage`, `.deb` or `.rpm` (Linux). The beta installers are unsigned. See [docs/INSTALLATION.md](docs/INSTALLATION.md) for requirements, first-launch warnings, updating and uninstalling.
+Download the installer for your system from [Releases](https://github.com/yazhiniyanMS/nexus/releases). Each release has `SHA256SUMS.txt` to check the download against.
 
-| System | Status |
-| --- | --- |
-| macOS (Apple Silicon) | Reference platform, used daily in development. |
-| macOS (Intel) | Compiled, packaged and launch-checked under Rosetta; never run on an Intel Mac. |
-| Windows 10/11 x64 | New in the beta. See [docs/WINDOWS.md](docs/WINDOWS.md). |
-| Linux x64 (Ubuntu 22.04) | New in the beta. See [docs/LINUX.md](docs/LINUX.md). |
+| System | File | Status |
+| --- | --- | --- |
+| macOS, Apple Silicon | `NEXUS_<version>_aarch64.dmg` | Reference platform, used daily |
+| macOS, Intel | `NEXUS_<version>_x64.dmg` | Built and launch-checked under Rosetta; not run on an Intel Mac |
+| Windows 10/11 x64 | `NEXUS_<version>_x64-setup.exe` or `.msi` | Built, installed and launch-checked in CI; little hands-on use |
+| Linux x64 (Ubuntu 22.04+) | `.deb`, `.rpm` or `.AppImage` | Built, installed and launch-checked in CI; little hands-on use |
 
-Exactly what has been compiled, tested, installed and checked by a person on each system is in [docs/RELEASES.md](docs/RELEASES.md#verification-status).
+The beta installers are **not code-signed**. On macOS, right-click NEXUS and choose **Open** the first time; on Windows choose **More info → Run anyway**. Step-by-step instructions, requirements and uninstalling: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-## Navigation
+> The current download is **0.1.0**. The codebase report, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can [build from source](docs/CONTRIBUTING.md).
 
-| Shortcut | Action |
-| --- | --- |
-| `⌘K` (macOS) / `Ctrl+K` (Windows, Linux), or `Ctrl+Shift+P` anywhere | Command palette: screens, projects, actions and live symbol search |
-| `⌘1…9` / `Ctrl+1…9` | Switch screen |
-| `Esc` | Close the palette, the file drawer or a dialog |
+## Try it in five minutes
 
-On Windows and Linux, `Ctrl` combinations typed inside a terminal go to the shell; copy and paste there are `Ctrl+Shift+C` / `Ctrl+Shift+V`.
+1. **Install and open NEXUS.** The first-run guide explains what it does and asks for a project.
+2. **Choose a folder with code in it.** NEXUS reads it (it never moves or changes your files) and builds an index of its symbols and imports — a few seconds for most projects.
+3. **Open Intelligence → Map** to see the architecture, or **Overview → Share a report** to save the codebase report.
+4. **Optional: connect a model.** If Ollama is installed, the guide can start and connect it; otherwise add a connection in **Settings → Model connections**.
+5. **Optional: give an agent a small task** in **Agents**, and approve or reject each step.
 
-The project selected in the sidebar applies to every screen. **About & feedback** in the sidebar shows the version, system details and a diagnostic report you can review and copy into a bug report.
+More: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
-## Develop
+## Model providers
 
-Prerequisites: Node 24, Rust (version pinned in `rust-toolchain.toml`), Git, and the [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
+| Provider | Where it runs | Key needed |
+| --- | --- | --- |
+| Ollama | This computer | No |
+| llama.cpp server | This computer | No |
+| LM Studio and other OpenAI-compatible servers | This computer or your server | Optional |
+| Anthropic | Anthropic's API | Yes |
+| OpenAI | OpenAI's API | Yes |
 
-```bash
-npm install
-npm run tauri dev        # run the app
-npm run tauri build      # build installers for this OS
-cargo test --manifest-path src-tauri/Cargo.toml
-npm test                 # frontend and release-script tests
+API keys are kept in the macOS Keychain, Windows Credential Manager or the Linux Secret Service, never in a file. Before project content goes to a model that is not on your computer, NEXUS asks you to confirm it for that request. Setup: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+## What works today
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Projects, analysis, findings | Available | Languages, frameworks, dependencies (npm, Cargo, pip, Go), possible secrets, large files, missing tests/README/CI |
+| Intelligence: map, symbols, references, docs | Available | Rust, TypeScript, JavaScript, Python, Go. Line-based extraction, not a full parser |
+| Codebase report | Available (next release) | HTML, no source code |
+| Ask about the code | Available, needs a model | Answers cite the files and lines they used |
+| Search | Available | Text or regex across every project, respects `.gitignore` |
+| Git | Available | Status, diffs, history, branches, stage, unstage, commit. No push, pull or branch switching |
+| Terminal | Available | Your shell in real pseudo-terminals; tabs, splits, saved output, search |
+| Tasks | Available | Step lists; every command needs approval |
+| Agents | Experimental, needs a model | Research → plan → implement → test → review in an isolated worktree, approvals at each gate |
+| Model Lab | Experimental | Runtimes, library, downloads you start, playground, benchmarks, comparison |
+
+Known limits are listed in [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
+
+## Privacy and security
+
+- **Local-first.** No account, no telemetry, no analytics, no update checks. Your projects, index and history live in a folder on your computer. [What can leave your machine, and when](docs/PRIVACY.md).
+- **Nothing runs without approval**, and approval is not presented as a sandbox. Each command runs at a level you choose — Trusted (as you), Restricted (sandboxed: writes only to the project, temp and caches; credential folders, NEXUS's data and the keychain hidden) or Isolated (Restricted without network) — using the macOS sandbox or bubblewrap on Linux. Windows currently offers Trusted only.
+- **The webview cannot touch files or start programs**; it calls typed commands in the Rust core, which checks every path.
+- Audits, threat model and known residual risks: [docs/audit/](docs/audit/). Report a vulnerability: [SECURITY.md](SECURITY.md).
+
+## How it is built
+
+A [Tauri 2](https://tauri.app) app: a Rust core (SQLite, Git, pseudo-terminals, process sandboxing, the code index and the agent engine) and a React 19 + TypeScript interface. No server and no bundled AI.
+
 ```
-
-More in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). Releases are described in [docs/RELEASES.md](docs/RELEASES.md).
-
-## UI test bridge (debug builds only)
-
-Debug builds started with `NEXUS_E2E_PORT=<port>` open a loopback-only socket that runs JavaScript inside the real window, so features can be tested through the actual interface. It is compiled out of release builds.
-
-## Architecture
-
-```
-src/                 React UI
-  lib/api.ts         the only place that calls the native core
-  views/             one file per workspace area
+src/                 React UI — lib/api.ts is the only place that calls the core
 src-tauri/src/       Rust core, one module per feature
-  db.rs              SQLite + migrations
-  projects.rs        import and analysis
-  search.rs          cross-project search
-  git.rs             Git status / log / diff (shells out to git)
-  tasks.rs           task engine: approval, execution, cancellation
-  agents/            agent orchestration, roles, isolated workspaces
-  intel/             code index, graphs, retrieval
-  terminal.rs        pseudo-terminal sessions, scrollback, layouts
-  jobs.rs            shared process runner
-  lab/               Model Lab: runtimes, registry, downloads, inference, benchmarks
+  intel/             code index, graphs, codebase report
+  agents/            agent pipeline, roles and permissions, isolated workspaces
+  exec/              execution levels, environment policy, sandbox backends
+  lab/               Model Lab: runtimes, downloads, inference, benchmarks
   platform/          everything that differs between macOS, Windows and Linux
-  settings.rs        stored settings
-  ai.rs              providers, keychain, chat, usage
-  activity.rs        activity log and stats
 ```
 
-Data lives in one SQLite file in the OS app-data directory (`dev.nexus.workspace/nexus.db`).
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Privacy
+## Roadmap
 
-No account, no analytics, no background network activity. What can leave your machine, and when, is listed in [docs/PRIVACY.md](docs/PRIVACY.md).
+Next: ship 0.2.0 with the report, guided setup and sandboxing; verify Windows and Linux hands-on; signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Security model
+## Contributing
 
-- The webview has no filesystem or shell access; it can only call the typed commands in `lib.rs`.
-- File reads are confined to imported project folders (paths are canonicalised and checked).
-- Commands run only as task steps or agent test steps, only after the user approves that specific command, or because the user typed them into a terminal.
-- A terminal is the user's own interactive shell and is not sandboxed. The only path into it is keyboard input and paste on the Terminal screen; no agent, task or AI code can send input to a terminal. A terminal starts inside the selected project and does not inherit NEXUS's stored API keys (they are never in the environment).
-- Agents write only inside an isolated Git worktree; paths are confined and symlinks refused. Changes reach the project only when the user approves the exact diff.
-- Model Lab never runs model output; it starts only Ollama and llama.cpp servers, from their own programs with fixed arguments and no shell, bound to 127.0.0.1. Project content goes to a connection that is not on this machine only after the user confirms it on that screen, and the core checks that confirmation.
-- API keys live in the macOS Keychain, Windows Credential Manager or the Linux Secret Service.
-- A strict Content Security Policy is applied; no remote scripts or CDNs are loaded.
+Bug reports, platform testing (especially Windows and Linux) and pull requests are welcome. Start with [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — it covers setup, the checks to run, and how the codebase is organised. Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 
-## Known limits
+## Licence
 
-- Agents need a Git repository with at least one commit. The Developer returns whole files and cannot delete files. Commands you approve are not network-sandboxed. Pause takes effect before the next step, not mid-command.
-- Terminal: shells stop when NEXUS closes (their output is kept and shown as ended). Saved output is limited to about 1–2 MB per terminal and is replayed at the current pane width, so old full-screen or wrapped output can look different after a reload. Output search works on the raw stream, so lines the shell redrew can appear doubled. Not tested on Windows or Linux yet.
-- Intelligence extracts symbols and imports with line-based rules, not a parser, so unusual constructs can be missed; references are matched by name, not by scope; Java, C#, C/C++, Kotlin and Swift are not indexed. See `docs/ARCHITECTURE.md`.
-- The code index is rebuilt in full on request; there is no file watcher.
-- Git supports staging and unstaging only (no committing, discarding or pushing from the app yet).
-- AI Workspace chat replies are not streamed and its history is not saved between sessions (the Model Lab Playground streams and saves sessions).
-- Model Lab: memory use and load time are reported only by Ollama; OpenAI-compatible endpoints report model names only; NEXUS can start Ollama and llama.cpp servers but does not install runtimes; Hugging Face downloads are limited to public, non-gated repositories.
-- The AI chat receives a project summary, not file contents.
-- Installers are unsigned; signing is prepared but needs certificates, and there is no auto-update.
-- Windows and Linux are new and have had little hands-on use; only x64 is built there.
-- Linux needs a running Secret Service (GNOME Keyring, KWallet) to store API keys.
-
-The design of Agents, Terminal and Model Lab and the roadmap for Git Intelligence and Testing Lab are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## License
-
-MIT
+[MIT](LICENSE).

@@ -310,7 +310,8 @@ async fn hf_get(state: &AppState, request: reqwest::RequestBuilder) -> Result<Va
     if !status.is_success() {
         return Err(AppError::Msg(format!("Hugging Face returned {status}")));
     }
-    resp.json().await.map_err(|_| AppError::Msg("Hugging Face replied with something unexpected".into()))
+    let body = ai::read_body(resp, ai::MAX_JSON_BYTES, &ai::Redactor::default()).await?;
+    serde_json::from_str(&body).map_err(|_| AppError::Msg("Hugging Face replied with something unexpected".into()))
 }
 
 /// Public repositories on Hugging Face that contain GGUF files and match `query`.
@@ -641,7 +642,7 @@ async fn run_ollama(
     let mut resp = req.send().await.map_err(|e| ai::transport_error(e, &redactor))?;
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
+        let body = ai::read_body_prefix(resp, ai::MAX_ERROR_BYTES).await;
         return Err(ai::error_detail(status, &body, &redactor));
     }
     let mut lines = Lines::default();

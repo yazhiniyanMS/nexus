@@ -7,9 +7,3 @@ export async function importProject(): Promise<Project | null> {
   if (typeof dir !== "string") return null;
   return api.addProject(dir);
 }
-
-/** Native confirmation dialog (window.confirm is unreliable inside webviews). */
-export async function confirmAction(message: string): Promise<boolean> {
-  const { confirm } = await import("@tauri-apps/plugin-dialog");
-  return confirm(message, { title: "NEXUS", kind: "warning" });
-}

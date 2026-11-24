@@ -25,11 +25,12 @@ Only as a direct result of something you do:
 
 | You do this | This is sent | To |
 | --- | --- | --- |
-| Send a prompt, ask a codebase question with an AI answer, or run an agent, using a **remote** provider you configured | The prompt. For codebase questions and agents this includes the source excerpts the answer is based on. | That provider's address. The screen says when a provider is not on this machine and asks you to confirm before anything is sent to it; NEXUS refuses to send project content to a remote provider without that confirmation. |
+| Send a prompt, ask a codebase question with an AI answer, or run an agent, using a **remote** provider you configured | The prompt. For codebase questions and agents this includes the source excerpts the answer is based on. Recognisable credentials in those excerpts are masked; in files an agent edits they are replaced by placeholders and restored only on your machine. | That provider's address. The screen says when a provider is not on this machine and asks you to confirm before anything is sent to it; NEXUS refuses to send project content to a remote provider without that confirmation. |
 | Use a **local** runtime (Ollama, llama.cpp, LM Studio on `localhost`) | The same content | Only your own machine |
 | Search for or download a model in Model Lab | Your search text, then the file request | Hugging Face, or the address you typed, or your Ollama server |
 | Click **Report a bug**, **Request a feature** or **Documentation** | Nothing from NEXUS; your browser opens a GitHub page | github.com |
-| Let a tool you run in the terminal or an approved task use the network | Whatever that tool sends | Wherever it sends it. NEXUS does not sandbox commands you approve or type. |
+| Let a tool you run in the terminal or an approved task use the network | Whatever that tool sends | Wherever it sends it. Terminals and Trusted commands are not sandboxed; Isolated commands have no network ([CONFIGURATION.md](CONFIGURATION.md#execution)). |
+| Save a **codebase report** | Nothing; the file is written where you choose | Your disk. It contains file paths, module and package names and counts, but no source code. |
 
 ## The diagnostic report
 

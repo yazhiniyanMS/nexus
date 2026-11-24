@@ -21,7 +21,7 @@ function Node({ projectId, entry, depth, selected, onOpen }: {
         onClick={toggle}
         style={{ paddingLeft: 8 + depth * 14 }}
         className={clsx(
-          "flex h-6.5 w-full items-center gap-1.5 pr-2 text-left text-[12.5px] hover:bg-raised",
+          "flex h-6.5 w-full items-center gap-1.5 pr-2 text-left text-sm hover:bg-raised",
           selected === entry.path ? "bg-raised text-ink" : "text-dim",
         )}
       >

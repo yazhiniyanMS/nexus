@@ -1,4 +1,6 @@
-//! Git intelligence. Read-only: shells out to the user's `git` so behaviour matches their CLI.
+//! Git intelligence: shells out to the user's `git` so behaviour matches their CLI.
+//! It reads, stages and unstages, and commits what the user staged. It never discards work,
+//! rewrites history, switches branches or talks to a remote.
 
 use crate::error::{AppError, Result};
 use crate::platform;
@@ -14,7 +16,16 @@ const MAX_DIFF_BYTES: usize = 400_000;
 pub(crate) fn git(dir: &Path, args: &[&str]) -> Result<String> {
     let program = platform::programs::git().ok_or(platform::programs::git_missing_message())?;
     let mut cmd = Command::new(program);
-    cmd.arg("-C").arg(dir).args(args).env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C");
+    cmd.arg("-C").arg(dir);
+    // A repository's own config is project content, not something the user ran. NEXUS runs
+    // Git automatically (Overview, Git screen), so settings that make Git start another program
+    // while only reading are switched off: the filesystem monitor hook here, external diff tools
+    // and text conversion filters in `diff_args`. Hooks still run on commit, as they do for
+    // `git commit` in a shell, because the user asked for that commit.
+    cmd.args(["-c", "core.fsmonitor=false"]);
+    cmd.args(args).env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C");
+    // Never wait for a password or passphrase prompt that nobody can see.
+    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(std::process::Stdio::null());
     // Hooks, credential helpers and pagers Git starts need the user's search path too.
     cmd.env("PATH", platform::env::search_path());
     platform::process::hide_window(&mut cmd);
@@ -63,6 +74,12 @@ pub struct Status {
     ahead: u32,
     behind: u32,
     files: Vec<FileStatus>,
+    /// A merge is in progress (MERGE_HEAD exists).
+    merging: bool,
+    /// A rebase is in progress.
+    rebasing: bool,
+    /// The repository has at least one commit.
+    has_commits: bool,
 }
 
 /// Parse `git status --porcelain=v2 --branch` output.
@@ -121,11 +138,75 @@ fn is_repo(dir: &Path) -> bool {
 
 #[tauri::command]
 pub async fn git_status(state: State<'_, AppState>, project_id: String) -> Result<Status> {
-    let root = project_root(&state, &project_id)?;
-    if !is_repo(&root) {
+    status_of(&project_root(&state, &project_id)?)
+}
+
+pub(crate) fn status_of(root: &Path) -> Result<Status> {
+    if !is_repo(root) {
         return Ok(Status::default());
     }
-    Ok(parse_status(&git(&root, &["status", "--porcelain=v2", "--branch", "--untracked-files=all"])?))
+    let mut s = parse_status(&git(root, &["status", "--porcelain=v2", "--branch", "--untracked-files=all"])?);
+    fill_state(root, &mut s);
+    Ok(s)
+}
+
+/// Merge, rebase and first-commit state, which porcelain status does not report.
+fn fill_state(root: &Path, s: &mut Status) {
+    s.has_commits = git(root, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok();
+    s.merging = git(root, &["rev-parse", "--verify", "-q", "MERGE_HEAD"]).is_ok();
+    let dir_exists = |name: &str| git(root, &["rev-parse", "--git-path", name]).map(|p| root.join(p.trim()).exists()).unwrap_or(false);
+    s.rebasing = dir_exists("rebase-merge") || dir_exists("rebase-apply");
+}
+
+#[derive(Serialize, Debug)]
+pub struct Committed {
+    hash: String,
+    short: String,
+    subject: String,
+}
+
+const MAX_MESSAGE_BYTES: usize = 64 * 1024;
+
+/// Commit what is staged, with the user's message, identity and hooks. Refuses to commit with
+/// unresolved conflicts or nothing staged, and never adds files on its own.
+fn commit_staged(root: &Path, message: &str) -> Result<Committed> {
+    let message = message.trim();
+    if message.is_empty() {
+        return Err("Write a commit message first".into());
+    }
+    if message.len() > MAX_MESSAGE_BYTES {
+        return Err("The commit message is too long".into());
+    }
+    let status = parse_status(&git(root, &["status", "--porcelain=v2", "--untracked-files=no"])?);
+    if status.files.iter().any(|f| f.conflicted) {
+        return Err("Resolve the merge conflicts and stage the resolved files before committing".into());
+    }
+    if !status.files.iter().any(|f| f.index != ".") {
+        return Err("Nothing is staged. Stage the changes you want in this commit first.".into());
+    }
+    git(root, &["commit", "--quiet", "--cleanup=strip", "-m", message]).map_err(|e| {
+        let text = e.to_string();
+        if text.contains("Please tell me who you are") || text.contains("user.email") {
+            AppError::Msg("Git does not know who you are. Set user.name and user.email (git config --global) and try again.".into())
+        } else {
+            AppError::Msg(format!("Git refused the commit: {text}"))
+        }
+    })?;
+    let out = git(root, &["log", "-1", "--format=%H%x00%h%x00%s"])?;
+    let mut parts = out.trim_end().split('\0');
+    Ok(Committed {
+        hash: parts.next().unwrap_or_default().to_string(),
+        short: parts.next().unwrap_or_default().to_string(),
+        subject: parts.next().unwrap_or_default().to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn git_commit(state: State<'_, AppState>, project_id: String, message: String) -> Result<Committed> {
+    let root = project_root(&state, &project_id)?;
+    let done = commit_staged(&root, &message)?;
+    crate::activity::log(&state.db.conn(), "git", &format!("Committed {} “{}”", done.short, done.subject), Some(&project_id));
+    Ok(done)
 }
 
 #[derive(Serialize)]
@@ -212,20 +293,24 @@ pub async fn git_log(state: State<'_, AppState>, project_id: String, limit: Opti
 
 #[tauri::command]
 pub async fn git_diff(state: State<'_, AppState>, project_id: String, path: String, staged: bool, untracked: bool) -> Result<String> {
-    let root = project_root(&state, &project_id)?;
+    diff_text(&project_root(&state, &project_id)?, &path, staged, untracked)
+}
+
+fn diff_text(root: &Path, path: &str, staged: bool, untracked: bool) -> Result<String> {
     if untracked {
-        // Untracked files have no diff; show them as an all-added patch.
-        let file = root.join(&path);
+        // Untracked files have no diff; show them as an all-added patch. The path comes from
+        // the UI, so it must resolve inside the project like any other file read.
+        let file = crate::projects::resolve_inside(root, path)?;
         let text = crate::projects::read_text(&file).ok_or("File is binary or too large to preview")?;
         let body: String = text.lines().map(|l| format!("+{l}\n")).collect();
         return Ok(truncate(format!("new file: {path}\n{body}")));
     }
-    let mut args = vec!["diff", "--no-color"];
+    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "--no-textconv"];
     if staged {
         args.push("--cached");
     }
-    args.extend(["--", path.as_str()]);
-    Ok(truncate(git(&root, &args)?))
+    args.extend(["--", path]);
+    Ok(truncate(git(root, &args)?))
 }
 
 #[tauri::command]
@@ -234,7 +319,7 @@ pub async fn git_show(state: State<'_, AppState>, project_id: String, hash: Stri
         return Err("Invalid commit hash".into());
     }
     let root = project_root(&state, &project_id)?;
-    Ok(truncate(git(&root, &["show", "--no-color", "--stat", "--patch", "--format=fuller", &hash])?))
+    Ok(truncate(git(&root, &["show", "--no-color", "--no-ext-diff", "--no-textconv", "--stat", "--patch", "--format=fuller", &hash])?))
 }
 
 fn stage_paths(root: &Path, paths: &[String]) -> Result<()> {
@@ -339,6 +424,97 @@ mod tests {
         assert_eq!(entry(&s, "a.txt"), Some((".".into(), "M".into())));
         assert_eq!(entry(&s, "gone.txt"), Some((".".into(), "D".into())));
         assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "one\ntwo, unsaved work\n", "edits must survive");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A project folder can arrive with its own `.git/config` (an archive, a shared drive).
+    /// Looking at it in NEXUS must not run the programs that config names.
+    #[cfg(unix)]
+    #[test]
+    fn repository_config_cannot_make_reading_run_programs() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = crate::projects::tests::temp_project(&[("a.txt", "one\n"), (".gitattributes", "*.txt diff=conv\n")]);
+        let marker = dir.join("ran.marker");
+        let script = dir.join("helper.sh");
+        std::fs::write(&script, format!("#!/bin/sh\necho \"$0 $@\" >> '{}'\ncat \"$1\" 2>/dev/null\n", marker.display())).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let g = |args: &[&str]| git(&dir, args).unwrap();
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.name", "t"]);
+        g(&["config", "user.email", "t@example.invalid"]);
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "first"]);
+        let helper = script.to_string_lossy().to_string();
+        g(&["config", "core.fsmonitor", &helper]);
+        g(&["config", "diff.conv.textconv", &helper]);
+        g(&["config", "diff.external", &helper]);
+        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+
+        let s = status_of(&dir).unwrap();
+        assert!(s.files.iter().any(|f| f.path == "a.txt"));
+        assert!(diff_text(&dir, "a.txt", false, false).unwrap().contains("+two"), "a plain diff is still shown");
+        let head = g(&["rev-parse", "HEAD"]);
+        git(&dir, &["show", "--no-color", "--no-ext-diff", "--no-textconv", "--stat", "--patch", head.trim()]).unwrap();
+        assert!(!marker.exists(), "a repository-configured program ran: {:?}", std::fs::read_to_string(&marker));
+        // Control: the same repository does run the helper for a plain `git diff`, so the
+        // assertion above is testing something real.
+        let program = platform::programs::git().unwrap();
+        Command::new(program).arg("-C").arg(&dir).args(["diff"]).output().unwrap();
+        assert!(marker.exists(), "control: plain git should have run the configured helper");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn untracked_previews_stay_inside_the_project() {
+        let outer = crate::projects::tests::temp_project(&[("secret.txt", "outside\n"), ("proj/a.txt", "inside\n")]);
+        let dir = outer.join("proj");
+        assert!(diff_text(&dir, "a.txt", false, true).unwrap().contains("+inside"));
+        for bad in ["../secret.txt", outer.join("secret.txt").to_str().unwrap()] {
+            let err = diff_text(&dir, bad, false, true).unwrap_err().to_string();
+            assert!(err.contains("outside the project"), "{bad}: {err}");
+        }
+        std::fs::remove_dir_all(&outer).unwrap();
+    }
+
+    #[test]
+    fn commits_only_what_is_staged_and_refuses_unsafe_commits() {
+        let dir = crate::projects::tests::temp_project(&[("a.txt", "one\n"), ("b.txt", "keep me\n")]);
+        let g = |args: &[&str]| git(&dir, args).unwrap();
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.name", "Tester"]);
+        g(&["config", "user.email", "tester@example.invalid"]);
+        let state = || {
+            let mut s = parse_status(&g(&["status", "--porcelain=v2", "--branch", "--untracked-files=all"]));
+            fill_state(&dir, &mut s);
+            s
+        };
+        assert!(!state().has_commits);
+        assert!(commit_staged(&dir, "first").unwrap_err().to_string().contains("Nothing is staged"));
+        stage_paths(&dir, &["a.txt".into()]).unwrap();
+        assert!(commit_staged(&dir, "   \n ").unwrap_err().to_string().contains("message"));
+
+        let c = commit_staged(&dir, "  Add a\n\nWith a body.  ").unwrap();
+        assert_eq!(c.subject, "Add a");
+        assert!(c.short.len() >= 7);
+        let s = state();
+        assert!(s.has_commits && !s.merging && !s.rebasing);
+        // b.txt was never staged, so it is still untracked and untouched.
+        assert_eq!(s.files.iter().map(|f| (f.path.as_str(), f.untracked)).collect::<Vec<_>>(), [("b.txt", true)]);
+        assert_eq!(std::fs::read_to_string(dir.join("b.txt")).unwrap(), "keep me\n");
+        assert_eq!(g(&["log", "-1", "--format=%B"]).trim(), "Add a\n\nWith a body.");
+
+        // A merge conflict blocks committing and is reported as a merge in progress.
+        g(&["checkout", "-q", "-b", "other"]);
+        std::fs::write(dir.join("a.txt"), "other\n").unwrap();
+        g(&["commit", "-qam", "other change"]);
+        g(&["checkout", "-q", "main"]);
+        std::fs::write(dir.join("a.txt"), "main\n").unwrap();
+        g(&["commit", "-qam", "main change"]);
+        assert!(git(&dir, &["merge", "-q", "other"]).is_err());
+        let s = state();
+        assert!(s.merging);
+        assert!(s.files.iter().any(|f| f.path == "a.txt" && f.conflicted));
+        assert!(commit_staged(&dir, "merge").unwrap_err().to_string().contains("conflicts"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

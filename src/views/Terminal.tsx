@@ -168,12 +168,12 @@ function Pane({ session, box, focused, onFocus, register, actions }: {
             className="h-6 w-40 rounded border border-line bg-bg px-1.5 text-xs focus:border-lav/60 focus:outline-none"
           />
         )}
-        <span className="truncate font-mono text-[11px] text-faint">{session.cwd ? `./${session.cwd}` : "."}</span>
+        <span className="truncate font-mono text-2xs text-faint">{session.cwd ? `./${session.cwd}` : "."}</span>
         {statusBadge(session)}
         <div className="ml-auto flex items-center gap-0.5">
           {confirmClose ? (
             <>
-              <span className="text-[11px] text-warn">Stop the shell and close?</span>
+              <span className="text-2xs text-warn">Stop the shell and close?</span>
               <Button size="sm" variant="danger" onClick={actions.close}>Stop and close</Button>
               <Button size="sm" variant="ghost" onClick={() => setConfirmClose(false)}>Keep</Button>
             </>
@@ -383,11 +383,9 @@ export default function TerminalView({ ws }: { ws: Workspace }) {
   const running = sessions.filter((s) => s.status === "running").length;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold">Terminal</div>
-          <div className="truncate text-xs text-faint">{ws.project.name} · {running} running · {sessions.length - running} finished</div>
-        </div>
+      <div className="flex h-11 shrink-0 items-center gap-3 border-b border-line px-4">
+        <h1 className="shrink-0 text-sm font-semibold">Terminal</h1>
+        <div className="min-w-0 truncate text-xs text-dim">{ws.project.name} · {running} running · {sessions.length - running} finished</div>
         <div className="ml-auto"><RuntimeChip onOpenLab={() => ws.go("models")} /></div>
         <form className="relative flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void searchAll(); }}>
           <SearchIcon size={13} className="pointer-events-none absolute left-2.5 text-faint" />
@@ -401,13 +399,13 @@ export default function TerminalView({ ws }: { ws: Workspace }) {
           />
           {matches && (
             <div data-testid="term-matches" className="absolute right-0 top-9 z-20 max-h-72 w-[30rem] overflow-auto rounded-md border border-line bg-panel p-1 shadow-xl">
-              <div className="flex items-center justify-between px-2 py-1 text-[11px] text-faint">
+              <div className="flex items-center justify-between px-2 py-1 text-2xs text-faint">
                 <span>{matches.length === 0 ? "No matches in saved output" : `${matches.length}${matches.length >= 200 ? "+" : ""} matching lines`}</span>
                 <button type="button" className="hover:text-ink" onClick={() => setMatches(undefined)}>Close</button>
               </div>
               {matches.map((m, i) => (
                 <button type="button" key={i} onClick={() => jump(m)} className="block w-full rounded px-2 py-1 text-left hover:bg-raised">
-                  <span className="mr-2 text-[11px] text-accent">{m.title}:{m.line}</span>
+                  <span className="mr-2 text-2xs text-accent">{m.title}:{m.line}</span>
                   <span className="font-mono text-xs text-dim">{m.text}</span>
                 </button>
               ))}
@@ -425,7 +423,7 @@ export default function TerminalView({ ws }: { ws: Workspace }) {
             {shells.map((s) => <option key={s} value={s}>{baseName(s)}</option>)}
           </select>
         )}
-        <Button size="sm" variant="primary" busy={busy} onClick={() => void open(addTab)}><Plus size={13} /> New terminal</Button>
+        <Button size="sm" variant={layout.tabs.length === 0 ? "default" : "primary"} busy={busy} onClick={() => void open(addTab)}><Plus size={13} /> New terminal</Button>
       </div>
       {error && <div className="px-4 pt-3"><ErrorBanner message={error} /></div>}
 

@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Source of docs/assets/social-preview.png (GitHub social preview, 1280×640).
+     Re-render with any browser screenshot at 1280×640, or the WebKit script described in
+     docs/launch/README.md. The screenshot is the real application. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body { background: #0b0c0e; color: #ecedee; font-family: -apple-system, "SF Pro Display", Inter, "Segoe UI", sans-serif; display: grid; grid-template-columns: 620px 1fr; }
+  .left { padding: 76px 0 64px 76px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 26px; letter-spacing: .06em; }
+  .mark { width: 44px; height: 44px; border-radius: 10px; background: #5fd4a8; color: #0b0c0e; display: grid; place-items: center; font-weight: 900; font-size: 24px; letter-spacing: 0; }
+  h1 { font-size: 44px; line-height: 1.12; letter-spacing: -0.02em; margin: 44px 0 22px; font-weight: 700; }
+  h1 em { font-style: normal; color: #5fd4a8; }
+  p { font-size: 21px; line-height: 1.5; color: #a3a7ae; margin: 0; max-width: 440px; }
+  .foot { margin-top: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip { font-size: 15px; color: #c9ccd1; border: 1px solid #2a2d33; border-radius: 999px; padding: 6px 13px; }
+  .right { position: relative; }
+  .shot { position: absolute; left: 10px; top: 64px; width: 880px; border-radius: 12px; border: 1px solid #2a2d33; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand"><span class="mark">N</span>NEXUS</div>
+    <h1>Understand a codebase.<br>Change it <em>only through you.</em></h1>
+    <p>A local-first desktop workspace: code maps without AI, and agents that work in a copy and wait for your approval.</p>
+    <div class="foot"><span class="chip">Open source · MIT</span><span class="chip">macOS · Windows · Linux</span><span class="chip">Local models</span></div>
+  </div>
+  <div class="right"><img class="shot" src="../screenshots/architecture-map.png" alt=""></div>
+</body>
+</html>

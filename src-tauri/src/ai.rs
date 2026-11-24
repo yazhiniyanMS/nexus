@@ -267,6 +267,12 @@ pub(crate) fn transport_error(e: reqwest::Error, redactor: &Redactor) -> AppErro
         AppError::Msg("Could not connect. Check the base URL and that the server is running.".into())
     } else if e.is_timeout() {
         AppError::Msg("The request timed out".into())
+    } else if e.is_redirect() {
+        AppError::Msg(
+            "The server redirected to another address; NEXUS does not follow that with your credentials. \
+             Use the final address as the base URL."
+                .into(),
+        )
     } else {
         AppError::Msg(redactor.clean(&format!("Network error: {e}")))
     }
@@ -284,11 +290,72 @@ pub(crate) fn error_detail(status: reqwest::StatusCode, body: &str, redactor: &R
     AppError::Msg(redactor.clean(&format!("Provider returned {status}: {detail}")))
 }
 
+/// Largest reply NEXUS reads from a model server's JSON API. Model lists and replies are far
+/// smaller; a larger body means the base URL points at something else.
+pub(crate) const MAX_JSON_BYTES: usize = 32 * 1024 * 1024;
+/// How much of an error reply is kept: enough for the server's explanation.
+pub(crate) const MAX_ERROR_BYTES: usize = 64 * 1024;
+
+/// The shared HTTP client. Redirects are followed only within the same scheme, host and port:
+/// credentials NEXUS attaches (`Authorization`, and `x-api-key`, which HTTP clients do not strip
+/// on their own) must never be carried to another server or down to plain HTTP.
+pub fn http_client() -> reqwest::Result<reqwest::Client> {
+    let policy = reqwest::redirect::Policy::custom(|attempt| {
+        let same_origin = attempt.previous().last().is_some_and(|prev| {
+            let next = attempt.url();
+            prev.scheme() == next.scheme()
+                && prev.host_str() == next.host_str()
+                && prev.port_or_known_default() == next.port_or_known_default()
+        });
+        if attempt.previous().len() > 5 {
+            attempt.error("too many redirects")
+        } else if same_origin {
+            attempt.follow()
+        } else {
+            attempt.error("the server redirected to another address; NEXUS does not follow that with your credentials")
+        }
+    });
+    reqwest::Client::builder()
+        .user_agent(concat!("nexus/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(10))
+        .redirect(policy)
+        .build()
+}
+
+/// Read a response body, failing once it grows past `max` bytes instead of buffering it all.
+pub(crate) async fn read_body(mut resp: reqwest::Response, max: usize, redactor: &Redactor) -> Result<String> {
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| transport_error(e, redactor))? {
+        if body.len() + chunk.len() > max {
+            return Err(AppError::Msg(format!(
+                "The server's reply is larger than {} MB, which no model API sends. Check the base URL.",
+                max / (1024 * 1024)
+            )));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(String::from_utf8_lossy(&body).into_owned())
+}
+
+/// The start of a response body, at most `max` bytes, for error messages. Never fails.
+pub(crate) async fn read_body_prefix(mut resp: reqwest::Response, max: usize) -> String {
+    let mut body = Vec::new();
+    while let Ok(Some(chunk)) = resp.chunk().await {
+        let room = max.saturating_sub(body.len());
+        body.extend_from_slice(&chunk[..chunk.len().min(room)]);
+        if body.len() >= max {
+            break;
+        }
+    }
+    String::from_utf8_lossy(&body).into_owned()
+}
+
 pub(crate) async fn send_json_within(a: Authed, timeout: Duration) -> Result<Value> {
     let Authed { req, redactor } = a;
     let resp = req.timeout(timeout).send().await.map_err(|e| transport_error(e, &redactor))?;
     let status = resp.status();
-    let text = resp.text().await.map_err(|e| transport_error(e, &redactor))?;
+    let text =
+        if status.is_success() { read_body(resp, MAX_JSON_BYTES, &redactor).await? } else { read_body_prefix(resp, MAX_ERROR_BYTES).await };
     if !status.is_success() {
         return Err(error_detail(status, &text, &redactor));
     }
@@ -473,7 +540,7 @@ pub async fn detect_local(state: State<'_, AppState>) -> Result<Vec<LocalRuntime
         let res = state.http.get(url).timeout(Duration::from_millis(1500)).send().await;
         let (running, models) = match res {
             Ok(r) if r.status().is_success() => {
-                let v: Value = r.json().await.unwrap_or(Value::Null);
+                let v: Value = serde_json::from_str(&read_body_prefix(r, MAX_JSON_BYTES).await).unwrap_or(Value::Null);
                 (true, if kind == "ollama" { parse_ollama_tags(&v) } else { parse_model_list(&v) })
             }
             _ => (false, vec![]),
@@ -618,6 +685,58 @@ pub fn usage_summary(state: State<'_, AppState>) -> Result<Vec<UsageRow>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lab::testserver::{serve, Resp};
+
+    /// A redirect to another server must not carry the API key there; one on the same server is
+    /// followed as before.
+    #[tokio::test]
+    async fn credentials_do_not_follow_redirects_to_another_server() {
+        let other = serve(|_| Resp::json(json!({"stolen": true}))).await;
+        let target = format!("{}/collect", other.url);
+        let origin = serve(move |req| match req.path.as_str() {
+            "/away" => Resp::bytes(302, "text/plain", vec![]).header("Location", &target),
+            "/moved" => Resp::bytes(302, "text/plain", vec![]).header("Location", "/here"),
+            _ => Resp::json(json!({"ok": true})),
+        })
+        .await;
+        let client = http_client().unwrap();
+        let send = |path: &str| {
+            let a = Authed {
+                req: client.get(format!("{}{path}", origin.url)).header("x-api-key", "dummy-key-for-tests"),
+                redactor: Redactor(Some("dummy-key-for-tests".into())),
+            };
+            send_json(a)
+        };
+        let err = send("/away").await.unwrap_err().to_string();
+        assert!(err.contains("redirected to another address"), "{err}");
+        assert!(!err.contains("dummy-key-for-tests"));
+        assert!(other.requests.lock().unwrap().is_empty(), "the other server was contacted");
+        assert_eq!(send("/moved").await.unwrap()["ok"], true, "same-server redirects still work");
+    }
+
+    /// A provider that does not answer in time gives a clear error, not a hang.
+    #[tokio::test]
+    async fn a_provider_that_does_not_answer_times_out() {
+        let slow = serve(|_| Resp::stream("application/json", vec![(5_000, "{}".into())])).await;
+        let a = Authed { req: http_client().unwrap().get(format!("{}/v1/models", slow.url)), redactor: Redactor::default() };
+        let started = std::time::Instant::now();
+        let err = send_json_within(a, Duration::from_millis(300)).await.unwrap_err().to_string();
+        assert!(err.contains("timed out"), "{err}");
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[tokio::test]
+    async fn oversized_replies_are_refused_without_reading_them_whole() {
+        let big = serve(|_| Resp::bytes(200, "application/json", vec![b' '; MAX_JSON_BYTES + 1024])).await;
+        let a = Authed { req: http_client().unwrap().get(format!("{}/v1/models", big.url)), redactor: Redactor::default() };
+        let err = send_json(a).await.unwrap_err().to_string();
+        assert!(err.contains("larger than 32 MB"), "{err}");
+        // Error bodies are cut, not refused: the explanation is at the start.
+        let failing = serve(|_| Resp::bytes(500, "text/plain", [b"boom ".to_vec(), vec![b'x'; 5 * MAX_ERROR_BYTES]].concat())).await;
+        let a = Authed { req: http_client().unwrap().get(failing.url.clone()), redactor: Redactor::default() };
+        let err = send_json(a).await.unwrap_err().to_string();
+        assert!(err.contains("500") && err.contains("boom"), "{}", &err[..err.len().min(200)]);
+    }
 
     #[test]
     fn parses_ollama_tags() {

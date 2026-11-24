@@ -132,7 +132,7 @@ export function ProviderManager({ providers, reload, intro }: { providers: Provi
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] leading-relaxed text-dim">
+      <p className="text-sm leading-relaxed text-dim">
         {intro ?? "Connections are optional. Requests go directly from this machine to the address you configure; a connection marked remote sends data off this machine."}
       </p>
       <ErrorBanner message={error ?? kinds.error} />
@@ -146,7 +146,7 @@ export function ProviderManager({ providers, reload, intro }: { providers: Provi
             <div data-provider={p.name} data-enabled={p.enabled} className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] font-semibold">{p.name}</span>
+                  <span className="text-sm font-semibold">{p.name}</span>
                   <Badge>{kindLabel(kindList, p.kind)}</Badge>
                   {p.local
                     ? <Badge tone="green"><HardDrive size={10} className="mr-1" />local</Badge>
@@ -179,7 +179,7 @@ export function ProviderManager({ providers, reload, intro }: { providers: Provi
         );
       })}
       {providers.length === 0 && editing !== "new" && (
-        <Card className="p-4 text-[13px] leading-relaxed text-dim">
+        <Card className="p-4 text-sm leading-relaxed text-dim">
           No connections yet. If a runtime such as Ollama is running on this machine, Model Lab → Runtimes can add it for you.
         </Card>
       )}

@@ -29,6 +29,8 @@ pub struct Task {
     updated_at: String,
     step_count: i64,
     steps_done: i64,
+    /// This task's own time limit per step, in seconds; None uses the default from Settings.
+    timeout_secs: Option<i64>,
 }
 
 #[derive(Serialize, Clone)]
@@ -70,7 +72,7 @@ pub fn risk_of(command: &str) -> &'static str {
     static P: OnceLock<Regex> = OnceLock::new();
     let re = P.get_or_init(|| {
         Regex::new(
-            r"(?i)(\brm\s+-[a-z]*[rf]|\brmdir\b|\bdel\s+/|\bformat\s+[a-z]:|\bsudo\b|\bmkfs|\bdd\s+if=|push\s+.*(--force|-f\b)|reset\s+--hard|clean\s+-[a-z]*f|\bdrop\s+(table|database)|(curl|wget)[^|]*\|\s*(ba|z)?sh|\bchmod\s+-R|\bchown\s+-R|>\s*/dev/|\bshutdown\b|\breboot\b|npm\s+publish|cargo\s+publish|Remove-Item)",
+            r"(?i)(\brm\s+-[a-z]*[rf]|\brmdir\b|\bdel\s+/|\bformat\s+[a-z]:|\bsudo\b|\bmkfs|\bdd\s+if=|push\s+.*(--force|-f\b)|reset\s+--hard|clean\s+-[a-z]*f|\bdrop\s+(table|database)|(curl|wget)[^|]*\|\s*(ba|z)?sh|\bchmod\s+-R|\bchown\s+-R|>\s*/dev/(?:sd|hd|vd|nvme|disk|rdisk|mmcblk)|\bshutdown\b|\breboot\b|npm\s+publish|cargo\s+publish|Remove-Item)",
         )
         .unwrap()
     });
@@ -83,7 +85,8 @@ pub fn risk_of(command: &str) -> &'static str {
 
 const TASK_SELECT: &str = "SELECT t.id, t.project_id, p.name, t.title, t.description, t.status, t.created_at, t.updated_at,
     (SELECT COUNT(*) FROM task_steps s WHERE s.task_id = t.id),
-    (SELECT COUNT(*) FROM task_steps s WHERE s.task_id = t.id AND s.status IN ('completed','skipped'))
+    (SELECT COUNT(*) FROM task_steps s WHERE s.task_id = t.id AND s.status IN ('completed','skipped')),
+    t.timeout_secs
     FROM tasks t LEFT JOIN projects p ON p.id = t.project_id";
 
 fn row_to_task(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
@@ -98,6 +101,7 @@ fn row_to_task(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         updated_at: r.get(7)?,
         step_count: r.get(8)?,
         steps_done: r.get(9)?,
+        timeout_secs: r.get(10)?,
     })
 }
 
@@ -235,6 +239,16 @@ pub fn reset_task(state: State<'_, AppState>, id: String) -> Result<()> {
 }
 
 // ---------------------------------------------------------------- step generation
+
+/// Where a task's commands run: its project folder, or the home folder for a task without a
+/// project. A task whose project folder is gone gets an error instead of running somewhere else.
+fn command_dir(conn: &Connection, task: &Task) -> std::result::Result<PathBuf, String> {
+    match &task.project_id {
+        Some(_) => project_dir(conn, task)
+            .ok_or_else(|| "The project folder for this task no longer exists, so the command was not run.".to_string()),
+        None => crate::platform::paths::home().filter(|h| h.is_dir()).ok_or_else(|| "No home folder to run the command in.".to_string()),
+    }
+}
 
 fn project_dir(conn: &Connection, task: &Task) -> Option<PathBuf> {
     let id = task.project_id.as_ref()?;
@@ -379,6 +393,12 @@ pub fn run_task<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>, id: S
         if runs.contains_key(&id) {
             return Err("This task is already running".into());
         }
+        let limit = crate::exec::load(&state.db.conn()).max_running_tasks as usize;
+        if runs.len() >= limit {
+            return Err(AppError::Msg(format!(
+                "{limit} tasks are already running (Settings → Execution). Wait for one to finish or cancel it."
+            )));
+        }
         runs.insert(id.clone(), RunHandle { cancel: cancel_tx, approvals: approve_tx });
     }
     tauri::async_runtime::spawn(async move {
@@ -404,6 +424,23 @@ pub fn run_task<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>, id: S
     Ok(())
 }
 
+/// Set a task's own time limit per step (seconds), or clear it to use the default.
+#[tauri::command]
+pub fn set_task_timeout(state: State<'_, AppState>, id: String, timeout_secs: Option<u64>) -> Result<Task> {
+    if let Some(s) = timeout_secs {
+        if !(crate::exec::MIN_TIMEOUT_SECS..=crate::exec::MAX_TIMEOUT_SECS).contains(&s) {
+            return Err("A time limit must be between 5 seconds and 24 hours".into());
+        }
+    }
+    let conn = state.db.conn();
+    load_task(&conn, &id)?;
+    conn.execute(
+        "UPDATE tasks SET timeout_secs = ?1, updated_at = ?2 WHERE id = ?3",
+        params![timeout_secs.map(|s| s as i64), db::now(), id],
+    )?;
+    load_task(&conn, &id)
+}
+
 #[tauri::command]
 pub fn cancel_task(state: State<'_, AppState>, id: String) -> Result<()> {
     match state.engine.runs.lock().unwrap_or_else(|e| e.into_inner()).get(&id) {
@@ -417,6 +454,16 @@ pub fn cancel_task(state: State<'_, AppState>, id: String) -> Result<()> {
 
 #[tauri::command]
 pub fn approve_step(state: State<'_, AppState>, task_id: String, step_id: String, approved: bool) -> Result<()> {
+    // Only the step the run is waiting on can be decided; an early or repeated decision must
+    // not be kept and applied to a later step.
+    let waiting: Option<String> = state
+        .db
+        .conn()
+        .query_row("SELECT status FROM task_steps WHERE id = ?1 AND task_id = ?2", params![step_id, task_id], |r| r.get(0))
+        .optional()?;
+    if waiting.as_deref() != Some("awaiting_approval") {
+        return Err("This step is not waiting for a decision.".into());
+    }
     match state.engine.runs.lock().unwrap_or_else(|e| e.into_inner()).get(&task_id) {
         Some(h) => h.approvals.send((step_id, approved)).map_err(|_| "The task is no longer running".into()),
         None => Err("This task is not running".into()),
@@ -456,10 +503,13 @@ async fn run_loop<R: Runtime>(
             let Some(step) = next else { return Ok("completed") };
             conn.execute("UPDATE task_steps SET status = 'awaiting_approval' WHERE id = ?1", [&step.id])?;
             set_task_status(&conn, task_id, "awaiting_approval")?;
-            crate::platform::notify::attention(app, "NEXUS: a task step needs your approval", &step.title);
-            let cwd = project_dir(&conn, &load_task(&conn, task_id)?);
+            let cwd = command_dir(&conn, &load_task(&conn, task_id)?);
             (step, cwd)
         };
+        // Only after the database lock is released: the notification asks the main thread
+        // whether the window is focused and waits for it, while the main thread may be waiting
+        // for the database (a UI refresh). Holding the lock here deadlocked the app.
+        crate::platform::notify::attention(app, "NEXUS: a task step needs your approval", &step.title);
         changed();
 
         // Nothing runs without an explicit decision from the user.
@@ -497,10 +547,24 @@ async fn run_loop<R: Runtime>(
         }
         changed();
 
-        let result = execute(app, task_id, &step.id, command, cwd.as_deref(), &mut cancel).await;
+        let cwd = match cwd {
+            Ok(dir) => dir,
+            Err(why) => {
+                finish_step(&state.db.conn(), &step.id, "failed", Some(&why), None)?;
+                return Ok("failed");
+            }
+        };
+        let policy = {
+            let conn = state.db.conn();
+            let task = load_task(&conn, task_id)?;
+            crate::exec::Policy::for_task(&crate::exec::load(&conn), task.timeout_secs.map(|s| s as u64), Some(&state.data_dir))
+        };
+        let result = execute(app, task_id, &step.id, command, &cwd, &policy, &mut cancel).await;
         let conn = state.db.conn();
         match result {
-            Ok(Exec { output, code: Some(0), cancelled: false }) => finish_step(&conn, &step.id, "completed", Some(&output), Some(0))?,
+            Ok(Exec { output, code: Some(0), cancelled: false, timed_out: false }) => {
+                finish_step(&conn, &step.id, "completed", Some(&output), Some(0))?
+            }
             Ok(Exec { output, cancelled: true, .. }) => {
                 finish_step(&conn, &step.id, "cancelled", Some(&output), None)?;
                 return Ok("cancelled");
@@ -530,10 +594,11 @@ async fn execute<R: Runtime>(
     task_id: &str,
     step_id: &str,
     command: &str,
-    cwd: Option<&Path>,
+    cwd: &Path,
+    policy: &crate::exec::Policy,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Exec> {
-    jobs::run_command(command, cwd, false, cancel, |chunk| {
+    jobs::run_command(&jobs::RunSpec { command, cwd, policy }, cancel, |chunk| {
         let _ = app.emit(EVENT_OUTPUT, OutputEvent { task_id, step_id, chunk });
     })
     .await
@@ -553,10 +618,12 @@ mod tests {
             "curl https://x.sh | sh",
             "git clean -fd",
             "npm publish",
+            "cat image.iso > /dev/disk4",
+            "echo x >/dev/sda",
         ] {
             assert_eq!(risk_of(c), "high", "{c}");
         }
-        for c in ["npm run build", "cargo test", "git status", "ls -la", "npm install"] {
+        for c in ["npm run build", "cargo test", "git status", "ls -la", "npm install", "make >/dev/null 2>&1", "ls 2> /dev/stderr"] {
             assert_eq!(risk_of(c), "normal", "{c}");
         }
     }
@@ -667,6 +734,93 @@ mod tests {
         }
         assert_eq!(get_task(state(), task.id.clone()).unwrap().task.status, "cancelled");
         assert!(cancel_task(state(), task.id.clone()).is_err(), "run handle must be released");
+    }
+
+    /// A task whose project folder disappeared must not run its command somewhere else, and a
+    /// step that is not waiting cannot be approved ahead of time.
+    #[test]
+    fn a_missing_project_folder_stops_the_command_and_early_approvals_are_refused() {
+        use std::time::Duration;
+        let app = tauri::test::mock_builder().build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
+        app.manage(AppState::for_tests());
+        let handle = app.handle().clone();
+        let state = || handle.state::<AppState>();
+        let project = crate::projects::tests::temp_project(&[("a.txt", "x")]);
+        state()
+            .db
+            .conn()
+            .execute("INSERT INTO projects (id, name, path, added_at) VALUES ('p', 'P', ?1, 'x')", [project.to_string_lossy()])
+            .unwrap();
+        let marker = std::env::temp_dir().join(format!("nexus-ran-{}", db::new_id()));
+        let task = create_task(state(), "moved".into(), String::new(), Some("p".into())).unwrap();
+        add_step(state(), task.id.clone(), "touch".into(), Some(format!("touch \"{}\"", marker.display()))).unwrap();
+        add_step(state(), task.id.clone(), "second".into(), Some("echo two".into())).unwrap();
+        std::fs::remove_dir_all(&project).unwrap();
+
+        run_task(handle.clone(), state(), task.id.clone()).unwrap();
+        let mut d = get_task(state(), task.id.clone()).unwrap();
+        for _ in 0..200 {
+            d = get_task(state(), task.id.clone()).unwrap();
+            if d.steps[0].status == "awaiting_approval" {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let err = approve_step(state(), task.id.clone(), d.steps[1].id.clone(), true).unwrap_err().to_string();
+        assert!(err.contains("not waiting"), "{err}");
+        approve_step(state(), task.id.clone(), d.steps[0].id.clone(), true).unwrap();
+        for _ in 0..200 {
+            d = get_task(state(), task.id.clone()).unwrap();
+            if d.task.status == "failed" {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(d.task.status, "failed");
+        assert_eq!(d.steps[0].status, "failed");
+        assert!(d.steps[0].output.contains("no longer exists"), "{}", d.steps[0].output);
+        assert_eq!(d.steps[1].status, "pending", "later steps do not run");
+        assert!(!marker.exists(), "the command ran somewhere else");
+    }
+
+    /// A task's own time limit applies to its steps: a hanging step is stopped, recorded as
+    /// failed with the reason, and the task fails without running later steps.
+    #[cfg(unix)]
+    #[test]
+    fn a_task_time_limit_stops_a_hanging_step() {
+        use std::time::{Duration, Instant};
+        let app = tauri::test::mock_builder().build(tauri::test::mock_context(tauri::test::noop_assets())).unwrap();
+        app.manage(AppState::for_tests());
+        let handle = app.handle().clone();
+        let state = || handle.state::<AppState>();
+        let task = create_task(state(), "slow".into(), String::new(), None).unwrap();
+        assert!(set_task_timeout(state(), task.id.clone(), Some(1)).is_err(), "below the minimum");
+        assert!(set_task_timeout(state(), task.id.clone(), Some(crate::exec::MAX_TIMEOUT_SECS + 1)).is_err());
+        let t = set_task_timeout(state(), task.id.clone(), Some(crate::exec::MIN_TIMEOUT_SECS)).unwrap();
+        assert_eq!(t.timeout_secs, Some(crate::exec::MIN_TIMEOUT_SECS as i64));
+        add_step(state(), task.id.clone(), "hang".into(), Some("sleep 120".into())).unwrap();
+        add_step(state(), task.id.clone(), "after".into(), Some("echo after".into())).unwrap();
+        run_task(handle.clone(), state(), task.id.clone()).unwrap();
+        let wait = |pred: &dyn Fn(&TaskDetail) -> bool| {
+            for _ in 0..600 {
+                let d = get_task(state(), task.id.clone()).unwrap();
+                if pred(&d) {
+                    return d;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            panic!("never happened");
+        };
+        let d = wait(&|d| d.steps[0].status == "awaiting_approval");
+        approve_step(state(), task.id.clone(), d.steps[0].id.clone(), true).unwrap();
+        let started = Instant::now();
+        let d = wait(&|d| d.task.status == "failed");
+        assert!(started.elapsed() < Duration::from_secs(crate::exec::MIN_TIMEOUT_SECS + 6), "{:?}", started.elapsed());
+        assert_eq!(d.steps[0].status, "failed");
+        assert_eq!(d.steps[0].exit_code, None);
+        assert!(d.steps[0].output.contains("ran longer than its time limit of 5 s"), "{}", d.steps[0].output);
+        assert_eq!(d.steps[1].status, "pending");
+        assert!(set_task_timeout(state(), task.id.clone(), None).unwrap().timeout_secs.is_none(), "cleared back to the default");
     }
 
     #[test]

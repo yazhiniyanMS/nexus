@@ -16,6 +16,8 @@ struct Scripted {
     /// Remaining failures to inject per role.
     failures: Mutex<HashMap<&'static str, u32>>,
     calls: Mutex<Vec<&'static str>>,
+    /// The last prompt each role received (system + user), as a provider would see it.
+    prompts: Mutex<HashMap<&'static str, String>>,
 }
 
 impl Scripted {
@@ -31,18 +33,25 @@ impl Scripted {
 }
 
 impl ModelClient for Scripted {
-    fn complete<'a>(&'a self, _state: &'a AppState, system: String, _user: String) -> ModelFuture<'a> {
+    fn complete<'a>(&'a self, _state: &'a AppState, system: String, user: String) -> ModelFuture<'a> {
         Box::pin(async move {
             let role = ["research", "architect", "developer", "review"]
                 .into_iter()
                 .find(|r| system.to_lowercase().contains(&format!("{r} agent")))
                 .expect("prompt names its role");
             self.calls.lock().unwrap().push(role);
+            self.prompts.lock().unwrap().insert(role, format!("{system}\n{user}"));
             if let Some(left) = self.failures.lock().unwrap().get_mut(role).filter(|n| **n > 0) {
                 *left -= 1;
                 return Err(AppError::Msg("Provider returned 503 Service Unavailable".into()));
             }
-            let content = self.replies.lock().unwrap().get(role).cloned().unwrap_or_default();
+            let mut content = self.replies.lock().unwrap().get(role).cloned().unwrap_or_default();
+            // Like a real model, echo back a credential placeholder it was given.
+            if content.contains("{{PLACEHOLDER}}") {
+                let re = regex::Regex::new(r"NEXUS_SECRET_\d+_[0-9a-f]{10}").unwrap();
+                let found = re.find(&user).map(|m| m.as_str().to_string()).unwrap_or_default();
+                content = content.replace("{{PLACEHOLDER}}", &found);
+            }
             Ok(ChatResponse { content, model: "scripted".into(), input_tokens: Some(10), output_tokens: Some(5), duration_ms: 1 })
         })
     }
@@ -498,4 +507,116 @@ fn research_documentation_is_top_level_capped_and_never_follows_symlinks() {
 
     fs::remove_dir_all(&dir).unwrap();
     fs::remove_file(&outside).unwrap();
+}
+
+/// Protected editing: the Developer gets placeholders instead of the credentials in the files it
+/// edits, and the files written to the user's project carry the real values again.
+#[test]
+fn the_developer_never_sees_credentials_and_the_code_keeps_them() {
+    let h = Harness::new();
+    let secret = format!("Pg-{}-9xQ", "s3cr3t".repeat(3));
+    let original = format!("pub const DB_PASSWORD: &str = \"{secret}\";\npub const RETRIES: u32 = 3;\n");
+    fs::write(h.project.join("src/config.rs"), &original).unwrap();
+    git(&h.project, &["add", "-A"]).unwrap();
+    git(&h.project, &["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "config"]).unwrap();
+    h.client.set(
+        "architect",
+        r#"{"analysis": "Config.", "issues": [], "steps": [{"title": "More retries", "detail": ""}], "files": ["src/config.rs"], "test_commands": []}"#,
+    );
+    h.client.set(
+        "developer",
+        &serde_json::json!({"summary": "Retries 5", "changes": [{"path": "src/config.rs",
+            "content": "pub const DB_PASSWORD: &str = \"{{PLACEHOLDER}}\";\npub const RETRIES: u32 = 5;\n"}]})
+        .to_string(),
+    );
+    let run = h.create();
+    h.decide(&run, &h.gate(&run, "plan_approval"), true);
+    let apply = h.gate(&run, "apply");
+    let developer_prompt = h.client.prompts.lock().unwrap().get("developer").cloned().unwrap();
+    assert!(!developer_prompt.contains(&secret), "the credential reached the model");
+    assert!(developer_prompt.contains("NEXUS_SECRET_1_") && developer_prompt.contains("write its placeholder exactly"));
+    for role in ["research", "architect", "review"] {
+        if let Some(p) = h.client.prompts.lock().unwrap().get(role) {
+            assert!(!p.contains(&secret), "the credential reached the {role} agent");
+        }
+    }
+    h.decide(&run, &apply, true);
+    h.finished(&run, "completed");
+    assert_eq!(h.read("src/config.rs"), format!("pub const DB_PASSWORD: &str = \"{secret}\";\npub const RETRIES: u32 = 5;\n"));
+    let d = h.detail(&run);
+    assert!(d.events.iter().any(|e| e.message.contains("sent as placeholders")));
+}
+
+/// A Developer reply with a placeholder it was never given is refused, and nothing is written.
+#[test]
+fn a_forged_placeholder_fails_the_step() {
+    let h = Harness::new();
+    h.client.set(
+        "developer",
+        &serde_json::json!({"summary": "x", "changes": [{"path": "src/greet.rs", "content": "// NEXUS_SECRET_3_0123456789\n"}]})
+            .to_string(),
+    );
+    let run = h.create();
+    h.decide(&run, &h.gate(&run, "plan_approval"), true);
+    let d = h.finished(&run, "failed");
+    assert!(d.run.error.as_deref().unwrap_or("").contains("placeholder NEXUS did not give it"), "{:?}", d.run.error);
+    assert_eq!(fs::read_to_string(h.project.join("src/greet.rs")).unwrap().replace("\r\n", "\n"), ORIGINAL);
+}
+
+/// An approved agent command that hangs is stopped at the time limit; the step fails with the
+/// reason and the run does not report success.
+#[test]
+fn a_hanging_agent_command_times_out_and_fails_the_step() {
+    let h = Harness::new();
+    let settings =
+        crate::exec::ExecSettings { agent_timeout_secs: crate::exec::MIN_TIMEOUT_SECS, ..crate::exec::load(&h.state().db.conn()) };
+    crate::settings::set(&h.state().db.conn(), "exec", &settings).unwrap();
+    h.client.set(
+        "architect",
+        r#"{"analysis": "x", "issues": [], "steps": [{"title": "s", "detail": ""}], "files": ["src/greet.rs"], "test_commands": ["sleep 120"]}"#,
+    );
+    let run = h.create();
+    h.decide(&run, &h.gate(&run, "plan_approval"), true);
+    let command = h.gate(&run, "command");
+    let started = Instant::now();
+    h.decide(&run, &command, true);
+    let d = h.wait(&run, "the command to time out", |d| step(d, "command").status == "failed");
+    assert!(started.elapsed() < Duration::from_secs(crate::exec::MIN_TIMEOUT_SECS + 6), "{:?}", started.elapsed());
+    let c = step(&d, "command");
+    assert!(c.error.as_deref().unwrap_or("").contains("timed out after 5 s"), "{:?}", c.error);
+    assert!(c.output.contains("ran longer than its time limit"));
+    assert!(d.run.status != "completed");
+}
+
+/// Cancelling several runs at once (running and queued) leaves every one cancelled and nothing
+/// active.
+#[test]
+fn cancelling_many_runs_at_once_is_consistent() {
+    let h = Harness::new();
+    let runs: Vec<String> = (0..4).map(|_| h.create()).collect();
+    h.gate(&runs[0], "plan_approval");
+    let cancels: Vec<_> = runs
+        .iter()
+        .map(|r| {
+            let (handle, run) = (h.app.handle().clone(), r.clone());
+            std::thread::spawn(move || {
+                let state = handle.state::<AppState>();
+                let _ = agent_cancel(handle.clone(), state, run);
+            })
+        })
+        .collect();
+    for c in cancels {
+        c.join().unwrap();
+    }
+    for r in &runs {
+        // A run can start between the queued check and the cancel; cancel again until it holds.
+        let started = Instant::now();
+        while h.detail(r).run.status != "cancelled" && started.elapsed() < Duration::from_secs(10) {
+            let _ = agent_cancel(h.app.handle().clone(), h.state(), r.clone());
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let d = h.finished(r, "cancelled");
+        assert!(d.steps.iter().all(|s| !matches!(s.status.as_str(), "running" | "awaiting_approval" | "pending")), "{r}");
+    }
+    assert!(h.state().agents.active.lock().unwrap().is_empty());
 }

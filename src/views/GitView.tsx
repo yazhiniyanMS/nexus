@@ -1,137 +1,182 @@
+// Git: review changes, stage them, commit them; read history and branches.
+// Only the index and new commits are ever written. Files on disk are never changed or discarded.
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, GitBranch, Minus, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, Minus, Plus, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { Workspace } from "../App";
-import { Badge, Button, DiffView, Empty, ErrorBanner, PageHeader, Spinner, Tabs } from "../components/ui";
+import { Badge, Button, DiffView, Empty, ErrorBanner, IconButton, Kbd, Spinner, Tabs, ViewHeader } from "../components/ui";
 import { api, type FileStatus } from "../lib/api";
+import { isMac, modPressed } from "../lib/platform";
 import { errorText, timeAgo, useAsync } from "../lib/util";
+import { changeCode } from "./Dashboard";
 
 type Tab = "changes" | "history" | "branches";
-type Selection = { title: string; load: () => Promise<string> };
+type Group = "conflicts" | "staged" | "changed" | "untracked";
+interface Entry { key: string; group: Group; file: FileStatus }
 
-const statusLabel: Record<string, string> = { M: "modified", A: "added", D: "deleted", R: "renamed", C: "copied", T: "type", U: "conflict", "?": "untracked" };
+const GROUPS: { id: Group; title: string; staged: boolean }[] = [
+  { id: "conflicts", title: "Merge conflicts", staged: false },
+  { id: "staged", title: "Staged", staged: true },
+  { id: "changed", title: "Changes", staged: false },
+  { id: "untracked", title: "Untracked", staged: false },
+];
 
-function FileRow({ f, letter, active, onClick, action }: {
-  f: FileStatus; letter: string; active: boolean; onClick: () => void; action: { label: string; staged: boolean; run: () => void };
-}) {
-  return (
-    <div className={clsx("group flex items-center hover:bg-raised", active && "bg-raised")}>
-    <button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-4 text-left">
-      <span
-        title={statusLabel[letter] ?? letter}
-        className={clsx("w-4 shrink-0 text-center font-mono text-xs font-bold", letter === "D" ? "text-danger" : letter === "?" || letter === "A" ? "text-accent" : "text-warn")}
-      >
-        {letter}
-      </span>
-      <span className="truncate font-mono text-xs">{f.path}</span>
-    </button>
-      <button
-        title={action.label}
-        aria-label={`${action.label}: ${f.path}`}
-        onClick={action.run}
-        className="mr-2 grid size-6 shrink-0 place-items-center rounded text-dim hover:bg-line hover:text-ink"
-      >
-        {action.staged ? <Minus size={13} /> : <Plus size={13} />}
-      </button>
-    </div>
-  );
+function DiffPane({ load, emptyTitle, emptyHint }: { load: (() => Promise<string>) | null; emptyTitle: string; emptyHint?: string }) {
+  const [body, setBody] = useState<{ text?: string; error?: string }>({});
+  useEffect(() => {
+    if (!load) return setBody({});
+    let live = true;
+    setBody({});
+    load().then((text) => live && setBody({ text })).catch((e) => live && setBody({ error: errorText(e) }));
+    return () => {
+      live = false;
+    };
+  }, [load]);
+  if (!load) return <Empty title={emptyTitle}>{emptyHint}</Empty>;
+  if (body.error) return <div className="p-4"><ErrorBanner message={body.error} /></div>;
+  if (body.text === undefined) return <Spinner label="Loading diff…" />;
+  if (body.text.trim() === "") return <Empty title="No textual changes">The file may be binary, or only its permissions changed.</Empty>;
+  return <DiffView text={body.text} />;
 }
 
 export default function GitView({ ws }: { ws: Workspace }) {
   const id = ws.projectId;
   const [tab, setTab] = useState<Tab>("changes");
-  const [sel, setSel] = useState<Selection | null>(null);
-  const [body, setBody] = useState<{ text?: string; error?: string }>({});
+  const [selected, setSelected] = useState<string | null>(null);
+  const [commitSel, setCommitSel] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const listRef = useRef<HTMLDivElement>(null);
   const status = useAsync(() => (id ? api.gitStatus(id) : Promise.resolve(undefined)), [id]);
   const isRepo = status.data?.is_repo ?? false;
   const log = useAsync(() => (id && isRepo ? api.gitLog(id) : Promise.resolve([])), [id, isRepo]);
   const branches = useAsync(() => (id && isRepo ? api.gitBranches(id) : Promise.resolve([])), [id, isRepo]);
 
-  useEffect(() => setSel(null), [id, tab]);
+  // Changes made outside NEXUS (an editor, the terminal) show up when you come back to the window.
   useEffect(() => {
-    if (!sel) return setBody({});
-    let live = true;
-    setBody({});
-    sel.load().then((text) => live && setBody({ text })).catch((e) => live && setBody({ error: errorText(e) }));
-    return () => {
-      live = false;
+    const onFocus = () => {
+      setNotice(undefined);
+      void status.reload();
     };
-  }, [sel]);
-
-  if (!id)
-    return (
-      <>
-        <PageHeader title="Git" />
-        <Empty icon={<GitBranch size={28} />} title="Import a project to inspect its repository" />
-      </>
-    );
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  useEffect(() => {
+    setSelected(null);
+    setCommitSel(null);
+    setError(undefined);
+    setNotice(undefined);
+  }, [id]);
 
   const s = status.data;
-  const files = s?.files ?? [];
-  const staged = files.filter((f) => !f.untracked && f.index !== ".");
-  const unstaged = files.filter((f) => !f.untracked && f.worktree !== ".");
-  const untracked = files.filter((f) => f.untracked);
-  const [actionError, setActionError] = useState<string>();
-  /** Stage or unstage paths. Only the index changes; files on disk are never modified. */
-  const setStaged = async (paths: string[], stage: boolean) => {
-    setActionError(undefined);
+  const entries = useMemo<Entry[]>(() => {
+    const files = s?.files ?? [];
+    const out: Entry[] = [];
+    for (const f of files.filter((f) => f.conflicted)) out.push({ key: `conflicts:${f.path}`, group: "conflicts", file: f });
+    for (const f of files.filter((f) => !f.untracked && !f.conflicted && f.index !== ".")) out.push({ key: `staged:${f.path}`, group: "staged", file: f });
+    for (const f of files.filter((f) => !f.untracked && !f.conflicted && f.worktree !== ".")) out.push({ key: `changed:${f.path}`, group: "changed", file: f });
+    for (const f of files.filter((f) => f.untracked)) out.push({ key: `untracked:${f.path}`, group: "untracked", file: f });
+    return out;
+  }, [s]);
+  const stagedCount = entries.filter((e) => e.group === "staged").length;
+  const conflictCount = entries.filter((e) => e.group === "conflicts").length;
+  const current = entries.find((e) => e.key === selected) ?? null;
+
+  const loadDiff = useMemo(() => {
+    if (!current || !id) return null;
+    const f = current.file;
+    return () => api.gitDiff(id, f.path, current.group === "staged", f.untracked);
+  }, [current, id]);
+  const loadCommit = useMemo(() => (commitSel && id ? () => api.gitShow(id, commitSel) : null), [commitSel, id]);
+
+  const run = useCallback(async (what: string, fn: () => Promise<unknown>) => {
+    setBusy(what);
+    setError(undefined);
+    setNotice(undefined);
     try {
-      await (stage ? api.gitStage(id, paths) : api.gitUnstage(id, paths));
+      await fn();
     } catch (e) {
-      setActionError(errorText(e));
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+      await status.reload();
     }
-    setSel(null);
-    await status.reload();
-  };
-  const refresh = () => {
-    void status.reload();
-    void log.reload();
-    void branches.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  /** Stage or unstage paths. Only the index changes; files on disk are never modified. */
+  const setStaged = (paths: string[], stage: boolean) => run(stage ? "stage" : "unstage", () => (stage ? api.gitStage(id!, paths) : api.gitUnstage(id!, paths)));
+
+  const commit = async () => {
+    if (!id || !message.trim() || stagedCount === 0 || conflictCount > 0) return;
+    setBusy("commit");
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      const done = await api.gitCommit(id, message);
+      setMessage("");
+      setSelected(null);
+      setNotice(`Committed ${done.short} “${done.subject}”`);
+      void log.reload();
+      void branches.reload();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+      await status.reload();
+    }
   };
 
-  const group = (title: string, list: FileStatus[], letter: (f: FileStatus) => string, isStaged: boolean) =>
-    list.length > 0 && (
-      <div>
-        <div className="flex items-center bg-panel px-4 py-1.5 text-xs font-semibold text-dim">
-          <span className="flex-1">{title} <span className="text-faint">{list.length}</span></span>
-          <button className="font-medium text-dim hover:text-ink" onClick={() => void setStaged(list.map((f) => f.path), !isStaged)}>
-            {isStaged ? "Unstage all" : "Stage all"}
-          </button>
-        </div>
-        {list.map((f) => {
-          const title = `${f.path}${isStaged ? " (staged)" : ""}`;
-          return (
-            <FileRow key={title} f={f} letter={letter(f)} active={sel?.title === title} onClick={() => setSel({ title, load: () => api.gitDiff(id, f.path, isStaged, f.untracked) })}
-              action={{ label: isStaged ? "Unstage" : "Stage", staged: isStaged, run: () => void setStaged([f.path], !isStaged) }} />
-          );
-        })}
-      </div>
+  const onListKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp"].includes(e.key) || entries.length === 0) return;
+    e.preventDefault();
+    const i = entries.findIndex((x) => x.key === selected);
+    const next = e.key === "ArrowDown" ? Math.min(entries.length - 1, i + 1) : Math.max(0, i === -1 ? 0 : i - 1);
+    setSelected(entries[next].key);
+    listRef.current?.querySelector(`[data-entry="${CSS.escape(entries[next].key)}"]`)?.scrollIntoView({ block: "nearest" });
+  };
+
+  if (!id) {
+    return (
+      <>
+        <ViewHeader title="Git" />
+        <Empty icon={<GitBranch size={28} />} title="Import a project to see its repository" />
+      </>
     );
+  }
+
+  const commitBlocked = !message.trim() ? "Write a commit message" : conflictCount > 0 ? "Resolve conflicts first" : stagedCount === 0 ? "Stage changes to commit" : undefined;
 
   return (
     <>
-      <PageHeader
-        title={`Git · ${ws.project?.name ?? ""}`}
-        subtitle={
+      <ViewHeader
+        title="Git"
+        context={
           s?.is_repo ? (
-            <span className="flex items-center gap-2">
-              <GitBranch size={12} /> {s.branch ?? "detached"}
-              {s.upstream && <span className="text-faint">→ {s.upstream}</span>}
-              {s.ahead > 0 && <span className="flex items-center text-accent"><ArrowUp size={11} />{s.ahead}</span>}
-              {s.behind > 0 && <span className="flex items-center text-warn"><ArrowDown size={11} />{s.behind}</span>}
+            <span data-testid="git-branch" className="flex items-center gap-2">
+              <GitBranch size={12} className="text-faint" />
+              <span className="font-mono text-ink">{s.branch ?? "detached HEAD"}</span>
+              {s.upstream ? <span className="text-faint">→ {s.upstream}</span> : <span className="text-faint">no upstream</span>}
+              {s.ahead > 0 && <span className="flex items-center text-warn" title={`${s.ahead} commit${s.ahead === 1 ? "" : "s"} not pushed`}><ArrowUp size={11} />{s.ahead}</span>}
+              {s.behind > 0 && <span className="flex items-center text-info" title={`${s.behind} commit${s.behind === 1 ? "" : "s"} to pull`}><ArrowDown size={11} />{s.behind}</span>}
+              {s.merging && <Badge tone="amber">merging</Badge>}
+              {s.rebasing && <Badge tone="amber">rebasing</Badge>}
             </span>
-          ) : undefined
+          ) : <span>{ws.project?.name}</span>
         }
-        actions={
-<Button onClick={refresh}><RefreshCw size={13} /> Refresh</Button>
-        }
+        actions={<IconButton label="Refresh" onClick={() => { void status.reload(); void log.reload(); void branches.reload(); }}><RefreshCw size={14} className={clsx(status.loading && "animate-spin")} /></IconButton>}
       />
-      <div className="empty:hidden p-3 pb-0"><ErrorBanner message={actionError ?? status.error ?? log.error ?? branches.error} /></div>
       {status.loading && !s ? (
-        <Spinner />
+        <Spinner label="Reading the repository…" />
+      ) : status.error ? (
+        <div className="p-4"><ErrorBanner message={status.error} /></div>
       ) : !s?.is_repo ? (
         <Empty icon={<GitBranch size={28} />} title="Not a Git repository">
-          {status.error ? "Git status could not be read." : "This folder has no Git history. Run git init in it to start tracking changes."}
+          This folder has no Git history. Run <code className="font-mono text-xs">git init</code> in the Terminal to start tracking it; NEXUS does not create repositories for you.
+          <div className="mt-3"><Button onClick={() => ws.go("terminal")}>Open Terminal</Button></div>
         </Empty>
       ) : (
         <>
@@ -139,83 +184,168 @@ export default function GitView({ ws }: { ws: Workspace }) {
             value={tab}
             onChange={setTab}
             tabs={[
-              { id: "changes", label: "Changes", count: files.length },
+              { id: "changes", label: "Changes", count: entries.length },
               { id: "history", label: "History", count: log.data?.length },
               { id: "branches", label: "Branches", count: branches.data?.length },
             ]}
           />
-          <div className="flex min-h-0 flex-1">
-            <div className={clsx("overflow-auto", tab === "branches" ? "flex-1" : "w-[42%] shrink-0 border-r border-line")}>
-              {tab === "changes" &&
-                (files.length === 0 ? (
-                  <Empty title="Working tree clean">No uncommitted changes.</Empty>
-                ) : (
-                  <>
-                    {group("Staged", staged, (f) => f.index, true)}
-                    {group("Changed", unstaged, (f) => (f.conflicted ? "U" : f.worktree), false)}
-                    {group("Untracked", untracked, () => "?", false)}
-                  </>
-                ))}
-              {tab === "history" &&
-                (log.data?.length === 0 ? (
-                  <Empty title="No commits yet" />
-                ) : (
-                  log.data?.map((c) => (
-                    <button
-                      key={c.hash}
-                      onClick={() => setSel({ title: c.hash, load: () => api.gitShow(id, c.hash) })}
-                      className={clsx("block w-full border-b border-line px-4 py-2 text-left hover:bg-raised", sel?.title === c.hash && "bg-raised")}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-[13px]">{c.subject}</span>
-                        {c.refs && c.refs.split(", ").slice(0, 3).map((r) => <Badge key={r} tone="blue">{r.replace("HEAD -> ", "")}</Badge>)}
+
+          {tab === "changes" && (
+            <div className="flex min-h-0 flex-1">
+              <div className="flex w-[22rem] shrink-0 flex-col border-r border-line">
+                {(s.merging || s.rebasing || conflictCount > 0) && (
+                  <div data-testid="git-conflict-banner" className="flex gap-2 border-b border-line bg-warn/5 px-3 py-2 text-xs leading-relaxed text-warn">
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                      {s.rebasing ? "A rebase is in progress." : s.merging ? "A merge is in progress." : ""}{" "}
+                      {conflictCount > 0
+                        ? `Fix the ${conflictCount} conflicted file${conflictCount === 1 ? "" : "s"} in your editor, then stage ${conflictCount === 1 ? "it" : "them"} to mark resolved.`
+                        : "All conflicts are resolved. Commit to finish, or abort with git in the Terminal."}
+                    </span>
+                  </div>
+                )}
+                <div ref={listRef} tabIndex={0} onKeyDown={onListKey} aria-label="Changed files" className="min-h-0 flex-1 overflow-auto py-1 outline-none focus-visible:shadow-[inset_2px_0_0_var(--color-lav)]">
+                  {entries.length === 0 ? (
+                    <div className="px-4 py-8 text-center">
+                      <div className="text-sm font-medium">Working tree clean</div>
+                      <div className="mt-1 text-xs text-dim">{s.has_commits ? "Nothing to commit. Edits you make appear here." : "No commits yet. Add files to the folder, then stage and commit them here."}</div>
+                    </div>
+                  ) : GROUPS.map((g) => {
+                    const list = entries.filter((e) => e.group === g.id);
+                    if (list.length === 0) return null;
+                    return (
+                      <div key={g.id} data-group={g.id} className="mb-1">
+                        <div className="flex h-7 items-center px-3 text-xs font-semibold text-dim">
+                          <span className={clsx(g.id === "conflicts" && "text-danger")}>{g.title}</span>
+                          <span className="ml-1.5 font-normal text-faint">{list.length}</span>
+                          <button
+                            className="ml-auto text-2xs font-medium text-faint hover:text-ink disabled:opacity-40"
+                            disabled={!!busy}
+                            onClick={() => void setStaged(list.map((e) => e.file.path), !g.staged)}
+                          >
+                            {g.staged ? "Unstage all" : g.id === "conflicts" ? "Mark all resolved" : "Stage all"}
+                          </button>
+                        </div>
+                        {list.map((e) => {
+                          const c = changeCode(e.file);
+                          return (
+                            <div key={e.key} data-entry={e.key} className={clsx("group flex h-7 items-center pr-1.5", selected === e.key ? "bg-raised" : "hover:bg-raised/50")}>
+                              <button className="flex min-w-0 flex-1 items-center gap-2 pl-3 text-left" onClick={() => setSelected(e.key)} title={`${e.file.path} — ${c.label}`}>
+                                <span className={clsx("w-3 shrink-0 text-center font-mono text-xs font-semibold", c.cls)}>{c.code}</span>
+                                <span className="truncate font-mono text-xs">
+                                  <span className="text-ink">{e.file.path.split("/").pop()}</span>
+                                  {e.file.path.includes("/") && <span className="ml-1.5 text-faint">{e.file.path.slice(0, e.file.path.lastIndexOf("/"))}</span>}
+                                </span>
+                              </button>
+                              <IconButton
+                                label={g.staged ? `Unstage ${e.file.path}` : g.id === "conflicts" ? `Mark ${e.file.path} resolved` : `Stage ${e.file.path}`}
+                                className="size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                disabled={!!busy}
+                                onClick={() => void setStaged([e.file.path], !g.staged)}
+                              >
+                                {g.staged ? <Minus size={13} /> : <Plus size={13} />}
+                              </IconButton>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="mt-0.5 flex gap-2 text-xs text-faint">
-                        <span className="font-mono">{c.short}</span>
-                        <span className="truncate">{c.author}</span>
-                        <span className="ml-auto shrink-0">{timeAgo(c.date)}</span>
-                      </div>
-                    </button>
-                  ))
+                    );
+                  })}
+                </div>
+
+                {/* Commit */}
+                <form className="shrink-0 space-y-2 border-t border-line p-3" onSubmit={(e) => { e.preventDefault(); void commit(); }}>
+                  <textarea
+                    aria-label="Commit message"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && modPressed(e)) {
+                        e.preventDefault();
+                        void commit();
+                      }
+                    }}
+                    rows={3}
+                    placeholder={stagedCount ? `Message for ${stagedCount} staged file${stagedCount === 1 ? "" : "s"}` : "Commit message"}
+                    className="w-full resize-none rounded-md border border-line bg-bg p-2 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button type="submit" variant="primary" size="sm" busy={busy === "commit"} disabled={!!commitBlocked || (!!busy && busy !== "commit")} title={commitBlocked}>
+                      <GitCommitHorizontal size={13} /> Commit
+                    </Button>
+                    <Kbd>{isMac ? "⌘↵" : "Ctrl+↵"}</Kbd>
+                    <span className="ml-auto truncate text-2xs text-faint">{commitBlocked ?? `${stagedCount} staged`}</span>
+                  </div>
+                  {notice && <div role="status" data-testid="git-notice" className="truncate text-xs text-ok">{notice}</div>}
+                  <ErrorBanner message={error} />
+                </form>
+              </div>
+              <div className="selectable min-w-0 flex-1 overflow-auto" data-testid="git-diff">
+                <DiffPane
+                  load={loadDiff}
+                  emptyTitle={entries.length ? "Select a file to see its changes" : "No changes"}
+                  emptyHint={entries.length ? "Use ↑ and ↓ in the file list to move between files." : undefined}
+                />
+              </div>
+            </div>
+          )}
+
+          {tab === "history" && (
+            <div className="flex min-h-0 flex-1">
+              <div className="w-[26rem] shrink-0 overflow-auto border-r border-line">
+                {log.error ? <div className="p-3"><ErrorBanner message={log.error} /></div> : log.loading && !log.data ? <Spinner /> : log.data?.length === 0 ? (
+                  <Empty title="No commits yet">Your first commit will appear here.</Empty>
+                ) : log.data?.map((c) => (
+                  <button
+                    key={c.hash}
+                    data-commit={c.short}
+                    onClick={() => setCommitSel(c.hash)}
+                    className={clsx("block w-full border-b border-line/60 px-3 py-2 text-left", commitSel === c.hash ? "bg-raised" : "hover:bg-raised/50")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm">{c.subject}</span>
+                      {c.refs && c.refs.split(", ").slice(0, 2).map((r) => <Badge key={r} tone="blue">{r.replace("HEAD -> ", "")}</Badge>)}
+                    </div>
+                    <div className="mt-0.5 flex gap-2 text-2xs text-faint">
+                      <span className="font-mono">{c.short}</span>
+                      <span className="truncate">{c.author}</span>
+                      <span className="ml-auto shrink-0">{timeAgo(c.date)}</span>
+                    </div>
+                  </button>
                 ))}
-              {tab === "branches" && (
-                <table className="w-full text-[13px]">
-                  <tbody className="divide-y divide-line">
+              </div>
+              <div className="selectable min-w-0 flex-1 overflow-auto"><DiffPane load={loadCommit} emptyTitle="Select a commit to see what it changed" /></div>
+            </div>
+          )}
+
+          {tab === "branches" && (
+            <div className="min-h-0 flex-1 overflow-auto">
+              {branches.error ? <div className="p-3"><ErrorBanner message={branches.error} /></div> : (
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-faint">
+                    <tr className="border-b border-line"><th className="px-4 py-2 font-medium">Branch</th><th className="font-medium">Last commit</th><th className="font-medium">Tracks</th><th className="px-4 text-right font-medium">Updated</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-line/60">
                     {branches.data?.map((b) => (
-                      <tr key={b.name}>
-                        <td className="px-5 py-2">
+                      <tr key={b.name} data-branch={b.name} className={clsx(b.current && "bg-raised/40")}>
+                        <td className="px-4 py-2">
                           <span className="flex items-center gap-2">
-                            <span className={clsx("font-mono text-xs", b.current && "font-bold text-accent")}>{b.name}</span>
-                            {b.current && <Badge tone="green">current</Badge>}
+                            <span className={clsx("font-mono text-xs", b.current ? "font-semibold text-ink" : "text-dim")}>{b.name}</span>
+                            {b.current && <Badge tone="green">checked out</Badge>}
                             {b.remote && <Badge>remote</Badge>}
                           </span>
                         </td>
-                        <td className="py-2 font-mono text-xs text-faint">{b.commit}</td>
-                        <td className="max-w-0 w-1/2 truncate py-2 text-dim">{b.subject}</td>
-                        <td className="py-2 text-xs text-faint">{b.upstream}</td>
-                        <td className="px-5 py-2 text-right text-xs text-faint whitespace-nowrap">{timeAgo(b.date)}</td>
+                        <td className="max-w-0 truncate py-2 pr-4 text-dim"><span className="mr-2 font-mono text-2xs text-faint">{b.commit}</span>{b.subject}</td>
+                        <td className="py-2 font-mono text-2xs text-faint">{b.upstream ?? "—"}</td>
+                        <td className="px-4 py-2 text-right text-2xs whitespace-nowrap text-faint">{timeAgo(b.date)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
+              <p className="px-4 py-3 text-2xs text-faint">Switching, creating and deleting branches is done in the Terminal; NEXUS never changes which branch is checked out.</p>
             </div>
-            {tab !== "branches" && (
-              <div className="selectable min-w-0 flex-1 overflow-auto">
-                {!sel ? (
-                  <Empty title={tab === "changes" ? "Select a file to see its diff" : "Select a commit to see its changes"} />
-                ) : body.error ? (
-                  <div className="p-4"><ErrorBanner message={body.error} /></div>
-                ) : body.text === undefined ? (
-                  <Spinner />
-                ) : body.text.trim() === "" ? (
-                  <Empty title="No textual changes">The file may be binary or only its mode changed.</Empty>
-                ) : (
-                  <DiffView text={body.text} />
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </>
       )}
     </>

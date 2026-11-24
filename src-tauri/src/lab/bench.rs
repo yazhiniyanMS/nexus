@@ -249,6 +249,7 @@ fn load_runs(state: &AppState, suite_id: &str) -> Result<Vec<Run>> {
 }
 
 pub fn load_suite(state: &AppState, id: &str) -> Result<Suite> {
+    #[allow(clippy::type_complexity)] // one row of columns, destructured right below
     let head: Option<(String, String, String, String, Option<String>, String, Option<String>)> = state
         .db
         .conn()
@@ -274,6 +275,7 @@ pub fn load_suite(state: &AppState, id: &str) -> Result<Suite> {
     })
 }
 
+#[allow(clippy::too_many_arguments)] // one column per argument; a struct would only rename them
 fn record(
     state: &AppState,
     suite_id: &str,

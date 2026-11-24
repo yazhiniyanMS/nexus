@@ -1,14 +1,13 @@
-// Provider Settings: the connections Model Lab can use, and the defaults the rest of NEXUS
-// picks up (default connection and model, generation settings, model folder).
+// Model defaults: the connection, model and generation settings the rest of NEXUS starts from.
+// Shown in Settings.
 import { useEffect, useState } from "react";
-import { ProviderManager } from "../../components/ProviderManager";
 import { Button, Card, ErrorBanner, Select } from "../../components/ui";
 import { api, type GenParams, type KindInfo } from "../../lib/api";
 import { describeParams, emptyParams, normalizeParams, paramsFor } from "../../lib/lab";
 import { errorText, useAsync } from "../../lib/util";
 import { LocalBadge, ModelPicker, ParamsEditor, Section, usable, type LabCtx } from "./shared";
 
-function Defaults({ ctx }: { ctx: LabCtx }) {
+export function Defaults({ ctx }: { ctx: LabCtx }) {
   const providers = usable(ctx.providers);
   const [providerId, setProviderId] = useState("");
   const [model, setModel] = useState("");
@@ -72,12 +71,12 @@ function Defaults({ ctx }: { ctx: LabCtx }) {
               {provider && <ModelPicker ctx={ctx} idPrefix="defaults" providerId={providerId} model={model} onChange={(_, m) => setModel(m)} />}
               {provider && <LocalBadge provider={provider} />}
             </div>
-            {provider && !provider.local && <div className="text-[11px] leading-relaxed text-warn">A remote default does not send anything by itself. Each screen still asks before it sends data to it.</div>}
+            {provider && !provider.local && <div className="text-2xs leading-relaxed text-warn">A remote default does not send anything by itself. Each screen still asks before it sends data to it.</div>}
           </div>
           <div className="max-w-md space-y-1">
             <div className="text-xs font-medium text-dim">Default generation settings</div>
             <ParamsEditor kind={kind} value={params} onChange={setParams} onError={setParamError} />
-            <div className="text-[11px] text-faint">Currently: {describeParams(params)}. Empty fields leave the runtime's own default in place.</div>
+            <div className="text-2xs text-faint">Currently: {describeParams(params)}. Empty fields leave the runtime's own default in place.</div>
           </div>
         </Section>
         <div className="flex items-center gap-3">
@@ -91,30 +90,5 @@ function Defaults({ ctx }: { ctx: LabCtx }) {
         </div>
       </form>
     </Card>
-  );
-}
-
-export default function ProvidersTab({ ctx }: { ctx: LabCtx }) {
-  const reload = async () => {
-    await ctx.reloadProviders();
-    await ctx.reloadSettings();
-    await ctx.refreshLibrary();
-  };
-  return (
-    <div className="min-h-0 flex-1 overflow-auto">
-      <div className="mx-auto w-full max-w-3xl space-y-5 p-5">
-        <Section title="Connections" hint="Where Model Lab finds models. Local runtimes need no key. Disable a connection to keep its settings without it ever being contacted.">
-          <ProviderManager providers={ctx.providers} reload={reload} intro="Requests go directly from this machine to the address of a connection. Local connections never leave it; remote ones are marked, and each screen asks before sending anything to them." />
-        </Section>
-        <Defaults ctx={ctx} />
-        <Card className="space-y-1.5 p-4 text-xs leading-relaxed text-dim">
-          <div className="text-[13px] font-semibold text-ink">How credentials and data are handled</div>
-          <div>· API keys are stored in your operating system's keychain. The NEXUS database only records that a key exists.</div>
-          <div>· Keys are sent only to the address of their own connection, and are removed from error messages and logs.</div>
-          <div>· Nothing is sent to a remote connection until you confirm it on the screen where you run the request.</div>
-          <div>· Model output is treated as text. NEXUS never runs it as a command.</div>
-        </Card>
-      </div>
-    </div>
   );
 }

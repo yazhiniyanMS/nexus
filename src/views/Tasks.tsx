@@ -1,28 +1,15 @@
 import clsx from "clsx";
 import { listen } from "@tauri-apps/api/event";
-import { AlertTriangle, Ban, Check, CircleDashed, ListChecks, Loader2, Play, Plus, RotateCcw, ShieldAlert, SkipForward, Sparkles, Square, Terminal, Trash2, Wand2, X } from "lucide-react";
+import { AlertTriangle, ListChecks, Play, Plus, RotateCcw, Sparkles, Square, Terminal, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Workspace } from "../App";
-import { Badge, Button, Card, Empty, ErrorBanner, Field, Input, Select } from "../components/ui";
+import { Badge, Button, Card, ConfirmButton, Empty, ErrorBanner, Field, Input, Select, Status, ViewHeader, type StatusKind } from "../components/ui";
+import { ExecNote, formatLimit } from "../components/ExecNote";
 import { api, TASK_CHANGED, TASK_OUTPUT, type Provider, type Step, type StepStatus, type Task, type TaskDetail } from "../lib/api";
-import { confirmAction } from "../lib/importProject";
 import { errorText, timeAgo, useAsync } from "../lib/util";
 
-const statusTone = { pending: "neutral", running: "blue", awaiting_approval: "amber", completed: "green", failed: "red", cancelled: "neutral", skipped: "neutral" } as const;
-const statusText: Record<StepStatus, string> = { pending: "pending", running: "running", awaiting_approval: "needs approval", completed: "completed", failed: "failed", cancelled: "cancelled", skipped: "skipped" };
-
-function StepIcon({ status }: { status: StepStatus }) {
-  const map = {
-    pending: <CircleDashed size={15} className="text-faint" />,
-    running: <Loader2 size={15} className="animate-spin text-lav" />,
-    awaiting_approval: <ShieldAlert size={15} className="text-warn" />,
-    completed: <Check size={15} className="text-accent" />,
-    failed: <X size={15} className="text-danger" />,
-    cancelled: <Ban size={15} className="text-faint" />,
-    skipped: <SkipForward size={15} className="text-faint" />,
-  };
-  return map[status];
-}
+const statusKind: Record<StepStatus, StatusKind> = { pending: "idle", running: "running", awaiting_approval: "waiting", completed: "done", failed: "failed", cancelled: "cancelled", skipped: "cancelled" };
+const statusText: Partial<Record<StepStatus, string>> = { pending: "Not run", awaiting_approval: "Needs approval", skipped: "Skipped" };
 
 function NewTask({ ws, onCreated, onCancel }: { ws: Workspace; onCreated: (t: Task) => void; onCancel: () => void }) {
   const [title, setTitle] = useState("");
@@ -41,7 +28,7 @@ function NewTask({ ws, onCreated, onCancel }: { ws: Workspace; onCreated: (t: Ta
         }
       }}
     >
-      <h2 className="text-[15px] font-semibold">New task</h2>
+      <h2 className="text-md font-semibold">New task</h2>
       <ErrorBanner message={error} />
       <Field label="Title"><Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Upgrade dependencies and verify the build" /></Field>
       <Field label="Details" hint="Optional. Used as context when planning steps with AI.">
@@ -49,7 +36,7 @@ function NewTask({ ws, onCreated, onCancel }: { ws: Workspace; onCreated: (t: Ta
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          className="w-full rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
+          className="w-full rounded-md border border-line bg-bg p-2.5 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none"
         />
       </Field>
       <Field label="Project" hint="Commands run in this project's folder.">
@@ -66,8 +53,8 @@ function NewTask({ ws, onCreated, onCancel }: { ws: Workspace; onCreated: (t: Ta
   );
 }
 
-function StepRow({ step, live, taskActive, onApprove, onDelete }: {
-  step: Step; live: string | undefined; taskActive: boolean; onApprove: (ok: boolean) => void; onDelete: () => void;
+function StepRow({ step, live, taskActive, timeoutSecs, onApprove, onDelete }: {
+  step: Step; live: string | undefined; taskActive: boolean; timeoutSecs: number | null; onApprove: (ok: boolean) => void; onDelete: () => void;
 }) {
   const output = step.status === "running" ? (live ?? "") : step.output;
   const pre = useRef<HTMLPreElement>(null);
@@ -77,13 +64,13 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
   const waiting = step.status === "awaiting_approval";
 
   return (
-    <Card className={clsx("overflow-hidden", waiting && "border-warn/40")}>
+    <div className={clsx("border-b border-line/60", waiting && "border-l-2 border-l-warn bg-warn/[0.04]")}>
       <div className="flex items-start gap-3 px-4 py-3">
-        <div className="pt-0.5"><StepIcon status={step.status} /></div>
+        <div className="pt-0.5"><Status kind={statusKind[step.status]} label={statusText[step.status]} showLabel={false} /></div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium">{step.position}. {step.title}</span>
-            <Badge tone={statusTone[step.status]}>{statusText[step.status]}</Badge>
+            <span className="text-sm font-medium">{step.position}. {step.title}</span>
+            <Status kind={statusKind[step.status]} label={statusText[step.status]} />
             {step.risk === "high" && <Badge tone="red">destructive</Badge>}
             {step.exit_code !== null && step.exit_code !== 0 && <span className="text-xs text-danger">exit {step.exit_code}</span>}
           </div>
@@ -99,6 +86,7 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
         <div className="flex items-center gap-3 border-t border-warn/30 bg-warn/5 px-4 py-2.5">
           <div className="min-w-0 flex-1 text-xs text-warn">
             {step.kind === "command" ? "NEXUS is waiting for your approval to run this command." : "Confirm once you have completed this step."}
+            {step.kind === "command" && <div className="mt-1"><ExecNote kind="task" timeoutSecs={timeoutSecs} /></div>}
             {step.risk === "high" && (
               <div className="mt-1 flex items-center gap-1.5 font-medium text-danger">
                 <AlertTriangle size={13} /> This command can delete data, rewrite history or use elevated privileges. Read it carefully.
@@ -114,7 +102,7 @@ function StepRow({ step, live, taskActive, onApprove, onDelete }: {
       {output && (
         <pre ref={pre} className="selectable max-h-72 overflow-auto border-t border-line bg-bg px-4 py-3 font-mono text-xs leading-5 whitespace-pre-wrap text-dim">{output}</pre>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -170,8 +158,8 @@ function Detail({ id, providers, onDeleted, onChanged }: { id: string; providers
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="shrink-0 border-b border-line px-5 py-3">
         <div className="flex items-center gap-3">
-          <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{task.title}</h1>
-          <Badge tone={statusTone[task.status]}>{statusText[task.status]}</Badge>
+          <h1 className="min-w-0 flex-1 truncate text-md font-semibold">{task.title}</h1>
+          <Status kind={statusKind[task.status]} label={statusText[task.status]} />
           {active ? (
             <Button variant="danger" onClick={() => act("cancel", () => api.cancelTask(id))}><Square size={12} /> Cancel</Button>
           ) : (
@@ -180,30 +168,42 @@ function Detail({ id, providers, onDeleted, onChanged }: { id: string; providers
                 <Play size={13} /> {steps.some((s) => s.status !== "pending") ? "Continue" : "Run"}
               </Button>
               <Button title="Reset every step to pending" disabled={!steps.length} onClick={() => act("reset", () => api.resetTask(id))}><RotateCcw size={13} /></Button>
-              <Button
-                variant="ghost"
+              <ConfirmButton
+                label=""
+                icon={<Trash2 size={13} />}
                 title="Delete task"
-                onClick={async () => {
-                  if (await confirmAction(`Delete the task “${task.title}” and its history?`)) {
-                    await api.deleteTask(id).then(onDeleted).catch((e) => setError(errorText(e)));
-                  }
-                }}
-              >
-                <Trash2 size={14} />
-              </Button>
+                confirm="Delete task and its history"
+                onConfirm={() => api.deleteTask(id).then(onDeleted).catch((e) => setError(errorText(e)))}
+              />
             </>
           )}
         </div>
-        <div className="mt-1 text-xs text-dim">
-          {task.project_name ?? "No project"} · {task.steps_done}/{task.step_count} steps done · updated {timeAgo(task.updated_at)}
+        <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-dim">
+          <span>{task.project_name ?? "No project"} · {task.steps_done}/{task.step_count} steps done · updated {timeAgo(task.updated_at)} ·</span>
+          <label className="flex items-center gap-1">
+            time limit per step
+            <select
+              aria-label="Time limit per step"
+              className="rounded border border-line bg-bg px-1 py-px text-xs text-ink disabled:opacity-60"
+              disabled={active}
+              value={task.timeout_secs ?? ""}
+              onChange={(e) => act("timeout", () => api.setTaskTimeout(id, e.target.value === "" ? null : Number(e.target.value)))}
+            >
+              <option value="">default (Settings)</option>
+              {[60, 300, 900, 1800, 3600, 7200, 14400, 28800].map((s) => <option key={s} value={s}>{formatLimit(s)}</option>)}
+              {task.timeout_secs !== null && ![60, 300, 900, 1800, 3600, 7200, 14400, 28800].includes(task.timeout_secs) && (
+                <option value={task.timeout_secs}>{formatLimit(task.timeout_secs)}</option>
+              )}
+            </select>
+          </label>
         </div>
-        {task.description && <p className="selectable mt-2 text-[13px] leading-relaxed whitespace-pre-wrap text-dim">{task.description}</p>}
+        {task.description && <p className="selectable mt-2 text-sm leading-relaxed whitespace-pre-wrap text-dim">{task.description}</p>}
       </header>
 
       <div className="flex-1 space-y-3 overflow-auto p-5">
         <ErrorBanner message={error} />
         {steps.length === 0 && (
-          <Card className="p-5 text-[13px] text-dim">
+          <Card className="p-5 text-sm text-dim">
             This task has no steps yet. Add them by hand, let NEXUS suggest a verification workflow from the project's manifests, or plan them with an AI provider.
           </Card>
         )}
@@ -213,6 +213,7 @@ function Detail({ id, providers, onDeleted, onChanged }: { id: string; providers
             step={s}
             live={live[s.id]}
             taskActive={active}
+            timeoutSecs={task.timeout_secs}
             onApprove={(ok) => act("approve", () => api.approveStep(id, s.id, ok))}
             onDelete={() => act("delete", () => api.deleteStep(id, s.id))}
           />
@@ -269,23 +270,19 @@ export default function TasksView({ ws }: { ws: Workspace }) {
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-64 shrink-0 flex-col border-r border-line">
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-          <span className="text-[13px] font-semibold">Tasks</span>
-          <Button size="sm" variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New</Button>
-        </div>
+        <ViewHeader title="Tasks" actions={<Button size="sm" variant="primary" onClick={() => setCreating(true)}><Plus size={13} /> New</Button>} />
         <div className="flex-1 overflow-auto p-2">
           {tasks.data?.map((t) => (
             <button
               key={t.id}
               onClick={() => { setSelected(t.id); setCreating(false); }}
-              className={clsx("mb-0.5 block w-full rounded-md px-2.5 py-2 text-left", !creating && t.id === current ? "bg-raised" : "hover:bg-raised/60")}
+              className={clsx("mb-0.5 flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left", !creating && t.id === current ? "bg-raised" : "hover:bg-raised/60")}
             >
-              <div className="truncate text-[13px] font-medium">{t.title}</div>
-              <div className="mt-0.5 flex items-center gap-2 text-xs text-faint">
-                <Badge tone={statusTone[t.status]}>{statusText[t.status]}</Badge>
-                <span>{t.steps_done}/{t.step_count}</span>
-                <span className="ml-auto truncate">{t.project_name}</span>
-              </div>
+              <Status kind={statusKind[t.status]} label={statusText[t.status]} showLabel={false} className="mt-[3px]" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{t.title}</span>
+                <span className="block truncate text-2xs text-faint">{t.steps_done} of {t.step_count} steps · {t.project_name ?? "no project"}</span>
+              </span>
             </button>
           ))}
         </div>

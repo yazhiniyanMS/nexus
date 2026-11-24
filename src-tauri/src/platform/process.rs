@@ -63,16 +63,100 @@ pub fn shell_command(command: &str, cwd: Option<&Path>) -> tokio::process::Comma
     cmd
 }
 
-/// Kill a process and everything it started.
+/// Every process descended from `root` (children, their children…), found by walking parent
+/// ids. This reaches processes that left the group or session `root` started them in (`setsid`,
+/// daemonising helpers), as long as the chain to `root` is still intact.
+#[cfg(unix)]
+pub fn descendants(root: u32) -> Vec<libc::pid_t> {
+    let Ok(out) = std::process::Command::new("ps").args(["-axo", "pid=,ppid="]).stdin(std::process::Stdio::null()).output() else {
+        return vec![];
+    };
+    let pairs: Vec<(libc::pid_t, libc::pid_t)> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let mut it = l.split_whitespace();
+            Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?))
+        })
+        .collect();
+    let mut found = vec![];
+    let mut frontier = vec![root as libc::pid_t];
+    while let Some(parent) = frontier.pop() {
+        for (pid, ppid) in &pairs {
+            if *ppid == parent && !found.contains(pid) {
+                found.push(*pid);
+                frontier.push(*pid);
+            }
+        }
+    }
+    found
+}
+
+#[cfg(unix)]
+fn parent_of(pid: libc::pid_t) -> Option<libc::pid_t> {
+    let out =
+        std::process::Command::new("ps").args(["-o", "ppid=", "-p", &pid.to_string()]).stdin(std::process::Stdio::null()).output().ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// Send `signal` to the group `pid` leads and to every descendant found now.
+#[cfg(unix)]
+fn signal_tree(pid: u32, signal: libc::c_int) -> Vec<libc::pid_t> {
+    let members = descendants(pid);
+    // SAFETY: plain signal delivery to processes this app started (or their descendants).
+    unsafe {
+        libc::killpg(pid as libc::pid_t, signal);
+        libc::kill(pid as libc::pid_t, signal);
+        for m in &members {
+            libc::kill(*m, signal);
+        }
+    }
+    members
+}
+
+/// Kill a process and everything it started, at once.
 pub fn kill_tree(pid: Option<u32>) {
     let Some(pid) = pid else { return };
     #[cfg(unix)]
-    // SAFETY: the child was started as its own process-group leader, so this reaches its descendants.
-    unsafe {
-        libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-    }
+    signal_tree(pid, libc::SIGKILL);
     #[cfg(windows)]
     taskkill(pid, true);
+}
+
+/// Stop a process tree the way a timeout or cancel should: ask everything to stop (SIGTERM, or
+/// a polite `taskkill`), wait up to `grace` for it to go, then kill whatever is left, including
+/// processes that ignore the request. Returns once the tree has been killed.
+pub async fn stop_tree(pid: Option<u32>, grace: std::time::Duration) {
+    let Some(pid) = pid else { return };
+    #[cfg(unix)]
+    {
+        let first = signal_tree(pid, libc::SIGTERM);
+        let alive = |p: libc::pid_t| unsafe { libc::kill(p, 0) == 0 };
+        let deadline = std::time::Instant::now() + grace;
+        while std::time::Instant::now() < deadline {
+            // SAFETY: signal 0 only checks that the process or group exists.
+            let group = unsafe { libc::killpg(pid as libc::pid_t, 0) == 0 };
+            if !group && !first.iter().any(|p| alive(*p)) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        let later = signal_tree(pid, libc::SIGKILL);
+        // Processes seen earlier that are no longer under `pid` lost their parent meanwhile and
+        // were re-parented to init. Only those are killed, so a pid reused by an unrelated
+        // process (which has a living parent) is never hit.
+        for p in first.iter().filter(|p| !later.contains(p)) {
+            if parent_of(*p) == Some(1) {
+                // SAFETY: plain signal delivery to an orphan of a tree this app started.
+                unsafe { libc::kill(*p, libc::SIGKILL) };
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        taskkill(pid, false);
+        tokio::time::sleep(grace).await;
+        taskkill(pid, true);
+    }
 }
 
 /// Ask a process tree to stop, leaving it time to clean up. Follow with [`kill_tree`] if it stays.

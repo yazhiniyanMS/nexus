@@ -134,7 +134,7 @@ pub fn info(state: &AppState) -> Result<StorageInfo> {
             });
         }
     }
-    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    files.sort_by_key(|a| a.name.to_lowercase());
     let space = disk_space(&dir);
     Ok(StorageInfo {
         dir: dir.to_string_lossy().into_owned(),
@@ -159,7 +159,7 @@ pub fn set_dir(state: &AppState, folder: Option<&Path>) -> Result<()> {
             if !path.is_absolute() || !path.is_dir() {
                 return Err("Choose an existing folder".into());
             }
-            let canonical = crate::platform::paths::canonical(&path)?;
+            let canonical = crate::platform::paths::canonical(path)?;
             // Refuse to write a probe file; just make sure it can be listed.
             fs::read_dir(&canonical).map_err(|e| AppError::Msg(format!("NEXUS cannot read that folder: {e}")))?;
             Some(canonical.to_string_lossy().into_owned())
