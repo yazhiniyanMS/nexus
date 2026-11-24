@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NEXUS — understand a codebase locally, change it only through you</title>
-<meta name="description" content="NEXUS is a free, open-source desktop app for macOS, Windows and Linux. It maps any codebase without AI — architecture, dependency cycles, hotspots, a shareable report — and runs AI agents as approval-gated proposals in an isolated Git worktree, with local models.">
+<meta name="description" content="NEXUS is a free, open-source, local-first developer workspace for macOS, Windows and Linux: codebase visualization and architecture analysis without AI, a shareable report with no source code, and local AI coding agents that need your approval before anything changes.">
 <link rel="canonical" href="{{SITE_URL}}">
 <meta name="theme-color" content="#060607">
 <meta property="og:type" content="website">
@@ -26,7 +26,7 @@
 <header class="top"><div class="wrap">
   <a class="brand" href="#top" aria-label="NEXUS home"><span class="mark" aria-hidden="true">N</span>NEXUS</a>
   <nav class="links" aria-label="Sections">
-    <a href="#features">Features</a><a href="#why">Why NEXUS</a><a href="#start">Get started</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a><a href="{{REPO_URL}}">GitHub</a>
+    <a href="#features">Features</a><a href="#privacy">Privacy</a><a href="#why">Why NEXUS</a><a href="#start">Get started</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a><a href="{{REPO_URL}}">GitHub</a>
   </nav>
 </div></header>
 
@@ -40,6 +40,7 @@
     <a class="btn" href="{{REPO_URL}}">View on GitHub</a>
   </div>
   <p class="note">No account, no telemetry, no AI key needed. Works with Ollama and other local models.</p>
+  <p class="note notice">The current download is <b>{{VERSION}}</b>. The codebase report, guided setup, sandboxed execution and the interface shown here are in the source and ship in the next release; you can <a href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">build it from source</a> today.</p>
   <figure class="hero-shot"><img src="assets/screenshots/architecture-map.png" alt="NEXUS showing the architecture map of a project: modules as circles, imports as arrows, dependency cycles outlined in red" width="2000" height="1272">
   <figcaption>The architecture map of NEXUS's own repository, built from a local code index. Every image on this page is the real application.</figcaption></figure>
 </div>
@@ -93,6 +94,17 @@
   </div>
 </div></section>
 
+<section id="privacy" aria-labelledby="privacy-h"><div class="wrap">
+  <h2 id="privacy-h">Privacy and security</h2>
+  <p class="sub">NEXUS runs your commands and reads your code, so it is built to be checked, not trusted on faith.</p>
+  <div class="grid">
+    <div class="card"><h3>Nothing leaves by itself</h3><p>No account, telemetry, analytics or update check. Code goes to a model only when you ask, and to a model off your computer only after you confirm it for that request.</p></div>
+    <div class="card"><h3>Approval is not called a sandbox</h3><p>Every command waits for approval and states its level. Restricted and Isolated are enforced by the macOS sandbox or bubblewrap; Windows currently runs commands as you (Trusted only), and the app says so.</p></div>
+    <div class="card"><h3>Keys stay in your keychain</h3><p>API keys live in the macOS Keychain, Windows Credential Manager or Linux Secret Service, are never sent along a redirect, and are removed from errors. Credentials in code sent to a model are masked or replaced with placeholders.</p></div>
+  </div>
+  <p class="note" style="margin-top:12px"><a href="{{REPO_URL}}/blob/main/docs/PRIVACY.md">What can leave your machine</a> · <a href="{{REPO_URL}}/tree/main/docs/audit">Threat model and audits</a> · <a href="{{REPO_URL}}/blob/main/SECURITY.md">Report a vulnerability</a></p>
+</div></section>
+
 <section id="why" aria-labelledby="why-h"><div class="wrap">
   <h2 id="why-h">Why NEXUS</h2>
   <p class="sub">Most AI coding tools start with the agent. NEXUS starts with understanding, and puts every change behind your approval. It is not an editor — use it next to yours.</p>
@@ -111,7 +123,7 @@
 <section id="start" aria-labelledby="start-h"><div class="wrap">
   <h2 id="start-h">Get started in five minutes</h2>
   <ol class="steps">
-    <li><b>Download</b> the installer for your system from <a href="{{RELEASES_URL}}">Releases</a> and check it against <code>SHA256SUMS.txt</code>. The beta is unsigned: on macOS right-click → <b>Open</b> the first time; on Windows <b>More info → Run anyway</b>.</li>
+    <li><b>Download</b> the installer for your system from <a href="{{RELEASES_URL}}">Releases</a> and check it against <code>SHA256SUMS.txt</code>. The beta is unsigned: on macOS open it once, then <b>System Settings → Privacy &amp; Security → Open Anyway</b>; on Windows <b>More info → Run anyway</b>.</li>
     <li><b>Choose a folder</b> with code in it. NEXUS analyses and indexes it in seconds and never changes your files.</li>
     <li><b>Open the map</b> (Intelligence) or <b>share a report</b> (Overview).</li>
     <li><b>Optional:</b> connect a model. If Ollama is installed, the first-run guide can start and connect it.</li>
@@ -136,7 +148,16 @@
     <li>teaching the code index another language (Java, C#, Kotlin, Swift, C/C++);</li>
     <li>documentation where the docs and the app disagree.</li>
   </ul>
-  <p style="margin-top:16px"><a class="btn" href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">How to contribute</a></p>
+  <p style="margin-top:16px" class="row"><a class="btn" href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">How to contribute</a><a class="btn" href="{{REPO_URL}}/labels/good%20first%20issue">Good first issues</a></p>
+  <h3 style="margin-top:28px">Tell us what happened</h3>
+  <p class="dim">Feedback goes into public GitHub issues — no forms elsewhere and no tracking. Each one asks only what is needed.</p>
+  <ul class="plain">
+    <li><a href="{{REPO_URL}}/issues/new?template=installation_problem.yml">It did not install or start</a></li>
+    <li><a href="{{REPO_URL}}/issues/new?template=platform_report.yml">It works (or not) on my system</a> — especially Windows and Linux</li>
+    <li><a href="{{REPO_URL}}/issues/new?template=bug_report.yml">Something is broken</a></li>
+    <li><a href="{{REPO_URL}}/issues/new?template=ux_feedback.yml">Something was confusing</a></li>
+    <li><a href="{{REPO_URL}}/issues/new?template=feature_request.yml">I need something it does not do</a></li>
+  </ul>
 </div></section>
 
 <section id="roadmap" aria-labelledby="rm-h"><div class="wrap">

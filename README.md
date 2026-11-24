@@ -8,6 +8,7 @@ and lets AI agents propose changes in an isolated copy that reach your files onl
 </p>
 
 <p align="center">
+<a href="https://yazhiniyanms.github.io/nexus/">Website</a> ·
 <a href="https://github.com/yazhiniyanMS/nexus/releases">Download</a> ·
 <a href="docs/GETTING_STARTED.md">Get started</a> ·
 <a href="docs/README.md">Documentation</a> ·
@@ -57,9 +58,15 @@ Download the installer for your system from [Releases](https://github.com/yazhin
 | Windows 10/11 x64 | `NEXUS_<version>_x64-setup.exe` or `.msi` | Built, installed and launch-checked in CI; little hands-on use |
 | Linux x64 (Ubuntu 22.04+) | `.deb`, `.rpm` or `.AppImage` | Built, installed and launch-checked in CI; little hands-on use |
 
-The beta installers are **not code-signed**. On macOS, right-click NEXUS and choose **Open** the first time; on Windows choose **More info → Run anyway**. Step-by-step instructions, requirements and uninstalling: [docs/INSTALLATION.md](docs/INSTALLATION.md).
+The beta installers are **not code-signed**. On macOS, open NEXUS once (macOS blocks it), then go to **System Settings → Privacy & Security**, click **Open Anyway** and confirm — right-click → Open no longer works since macOS 15; on Windows choose **More info → Run anyway**. Step-by-step instructions, requirements and uninstalling: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-> The current download is **0.1.0**. The codebase report, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can [build from source](docs/CONTRIBUTING.md).
+> The current download is **0.1.0**. The codebase report, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can build it from source (Node 24, Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)):
+>
+> ```bash
+> git clone https://github.com/yazhiniyanMS/nexus.git && cd nexus
+> npm install
+> npm run tauri dev
+> ```
 
 ## Try it in five minutes
 
@@ -126,6 +133,16 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Roadmap
 
 Next: ship 0.2.0 with the report, guided setup and sandboxing; verify Windows and Linux hands-on; signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Feedback
+
+Everything goes through public GitHub issues — no external forms and no tracking:
+[it did not install](https://github.com/yazhiniyanMS/nexus/issues/new?template=installation_problem.yml) ·
+[how it runs on my system](https://github.com/yazhiniyanMS/nexus/issues/new?template=platform_report.yml) ·
+[something is broken](https://github.com/yazhiniyanMS/nexus/issues/new?template=bug_report.yml) ·
+[something was confusing](https://github.com/yazhiniyanMS/nexus/issues/new?template=ux_feedback.yml) ·
+[I need a feature](https://github.com/yazhiniyanMS/nexus/issues/new?template=feature_request.yml).
+Reports from Windows and Linux are the most useful thing you can send right now.
 
 ## Contributing
 

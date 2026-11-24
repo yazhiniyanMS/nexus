@@ -19,6 +19,23 @@ const KINDS = ["function", "method", "class", "struct", "interface", "trait", "e
 function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
   const [mode, setMode] = useState("module-2");
   const [externals, setExternals] = useState(false);
+  // Start at the folder depth that shows the most dependencies while staying readable: a project
+  // whose code sits in one deep folder (src-tauri/src/…) looks like a single circle at two levels.
+  useEffect(() => {
+    let live = true;
+    Promise.all([1, 2, 3].map((d) => api.dependencyGraph(projectId, "module", d, false)))
+      .then((graphs) => {
+        let best = 1;
+        graphs.forEach((g, i) => {
+          if (g.nodes.length <= 36 && g.edges.length > graphs[best - 1].edges.length) best = i + 1;
+        });
+        if (live) setMode(`module-${best}`);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
   const [selected, setSelected] = useState<string | null>(null);
   const [level, depth] = mode === "file" ? (["file", 1] as const) : (["module", Number(mode.split("-")[1])] as const);
   const graph = useAsync(() => api.dependencyGraph(projectId, level, depth, externals), [projectId, mode, externals]);

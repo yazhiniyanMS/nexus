@@ -1,0 +1,48 @@
+name: Platform report
+description: Tell us how NEXUS runs on your system — working or not. These reports are how Windows and Linux support gets verified.
+title: "[Platform] "
+labels: ["platform-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A report that says "everything I tried worked" is just as useful as a failure. Please do not paste source code, API keys or private paths.
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options: [macOS (Apple Silicon), macOS (Intel), Windows 11, Windows 10, Ubuntu / Debian, Fedora / RHEL, Arch, Other Linux]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: System version and NEXUS version
+      placeholder: "Ubuntu 24.04, NEXUS 0.1.0 (.deb)"
+    validations:
+      required: true
+  - type: checkboxes
+    id: tried
+    attributes:
+      label: What worked
+      options:
+        - label: Installed and started
+        - label: Added a project; Overview and the architecture map appeared
+        - label: Saved a codebase report and opened it in a browser
+        - label: Search found text in the project
+        - label: Git showed changes and a diff
+        - label: A terminal opened and ran commands
+        - label: A task command ran after approval
+        - label: Connected a model (local or hosted)
+        - label: Restricted or Isolated execution worked (macOS or Linux with bubblewrap)
+  - type: textarea
+    id: problems
+    attributes:
+      label: What did not work, or looked wrong
+      description: Leave empty if nothing. Screenshots help.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic report (optional)
+      description: About & feedback → Copy report. It contains no code, file names or keys; read it before pasting.
+      render: text

@@ -4,7 +4,7 @@ From download to a mapped project in about five minutes. No account and no AI ke
 
 ## 1. Install
 
-Download the installer for your system from [Releases](https://github.com/yazhiniyanMS/nexus/releases) and follow [INSTALLATION.md](INSTALLATION.md). The beta builds are not code-signed, so the first launch needs one extra click (macOS: right-click → **Open**; Windows: **More info → Run anyway**).
+Download the installer for your system from [Releases](https://github.com/yazhiniyanMS/nexus/releases) and follow [INSTALLATION.md](INSTALLATION.md). The beta builds are not code-signed, so the first launch needs one extra click (macOS: open it once, then **System Settings → Privacy & Security → Open Anyway**; Windows: **More info → Run anyway**).
 
 Optional but useful:
 

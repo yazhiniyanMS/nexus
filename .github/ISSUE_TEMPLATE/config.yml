@@ -1,1 +1,11 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/yazhiniyanMS/nexus/blob/main/docs/TROUBLESHOOTING.md
+    about: Common install and first-launch problems (unsigned app warnings, Ollama, Git) and how to fix them.
+  - name: Questions and answers (FAQ)
+    url: https://github.com/yazhiniyanMS/nexus/blob/main/docs/FAQ.md
+    about: What NEXUS does and doesn't do, privacy, models and limits.
+  - name: Report a security vulnerability privately
+    url: https://github.com/yazhiniyanMS/nexus/blob/main/SECURITY.md
+    about: Please don't open a public issue for vulnerabilities; follow SECURITY.md.

@@ -15,7 +15,7 @@ macOS is the reference platform: NEXUS is developed and used on Apple Silicon.
 
 ## Unsigned beta
 
-The beta is not signed with a Developer ID and not notarized, so Gatekeeper blocks the first launch. Right-click the app and choose **Open**, or allow it under System Settings → Privacy & Security. Signing and notarization are prepared in the release workflow and switch on when the project has an Apple Developer certificate ([RELEASES.md](RELEASES.md#signing)).
+The beta is not signed with a Developer ID and not notarized, so Gatekeeper blocks the first launch. Open NEXUS once so macOS blocks it, then go to **System Settings → Privacy & Security**, scroll to Security, click **Open Anyway**, confirm with **Open** and your password. Since macOS 15 (Sequoia), right-click → Open no longer bypasses this; on macOS 14 and earlier it still does. Signing and notarization are prepared in the release workflow and switch on when the project has an Apple Developer certificate ([RELEASES.md](RELEASES.md#signing)).
 
 ## Known limitations
 

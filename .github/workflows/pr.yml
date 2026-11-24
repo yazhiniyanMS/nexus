@@ -108,3 +108,16 @@ jobs:
         env:
           NEXUS_REQUIRE_SANDBOX: "1"
         run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- exec:: jobs:: secrets:: agents:: tasks::"
+
+  website:
+    name: Website builds and links resolve
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Build site (not published from pull requests)
+        run: node scripts/build-site.mjs --repo "${{ github.repository }}" --out _site
+      - name: Check links, images and metadata
+        run: node scripts/check-site.mjs _site

@@ -1,0 +1,26 @@
+name: Confusing or hard to use
+description: Something worked, but was confusing, slow to find, or worded badly
+title: "[UX] "
+labels: ["ux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Small frictions decide whether people keep using a tool, so these reports matter. Please do not paste source code or keys.
+  - type: input
+    id: where
+    attributes:
+      label: Where in NEXUS
+      placeholder: "First-run setup, step 2"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would have made it clear (optional)

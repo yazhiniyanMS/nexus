@@ -1,27 +1,38 @@
-# Publishes the website in website/ to GitHub Pages. Runs only when started by hand or when a
-# release is published, never on ordinary pushes.
+# Builds the website (website/ + docs/assets) and publishes it to GitHub Pages.
+#
+# - Pull requests: the site is built and checked (links, images, metadata) by pr.yml; nothing is
+#   published from a pull request.
+# - Production: deploys only from main — on a push that changes the site, or when started by hand
+#   on main. Pages' default environment rules allow only the default branch, so tags are not used.
+#
+# One-time setup (repository owner): Settings → Pages → Source: GitHub Actions.
 name: Website
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - website/**
+      - docs/assets/**
+      - scripts/build-site.mjs
+      - scripts/check-site.mjs
+      - package.json
+      - .github/workflows/pages.yml
   workflow_dispatch:
-  release:
-    types: [published]
 
+# Default: read-only. Only the deploy job gets the Pages permissions it needs.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# One deployment at a time; a newer push waits rather than cancelling one that is publishing.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    name: Build and check the site
     runs-on: ubuntu-22.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,9 +40,31 @@ jobs:
           node-version-file: .node-version
       - name: Build site
         run: node scripts/build-site.mjs --repo "${{ github.repository }}" --out _site
-      - uses: actions/configure-pages@v5
+      - name: Check links, images and metadata
+        run: node scripts/check-site.mjs _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Check that GitHub Pages is enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/${{ github.repository }}/pages" --silent 2>/dev/null; then
+            echo "::error title=GitHub Pages is not enabled::Enable it once in Settings → Pages → Source: GitHub Actions (or: gh api -X POST repos/${{ github.repository }}/pages -f build_type=workflow), then re-run this workflow."
+            exit 1
+          fi
       - id: deploy
         uses: actions/deploy-pages@v4

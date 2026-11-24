@@ -6,7 +6,7 @@ If none of this helps, open **About & feedback** in the sidebar: it has a diagno
 
 | Problem | What to do |
 | --- | --- |
-| macOS: "NEXUS can't be opened because Apple cannot check it" | The beta is unsigned. Right-click NEXUS → **Open** → **Open**, or System Settings → Privacy & Security → **Open Anyway**. Needed once. |
+| macOS: "NEXUS can't be opened because Apple cannot check it" | The beta is unsigned. Open it once, then **System Settings → Privacy & Security → Open Anyway → Open** (with your password). Needed once. Right-click → Open only works on macOS 14 and earlier. |
 | Windows: "Windows protected your PC" | **More info → Run anyway**. The installer is unsigned. |
 | Linux: the window is blank or the app does not start | Install WebKitGTK 4.1 and GTK 3; see [LINUX.md](LINUX.md). |
 | "NEXUS cannot start: NEXUS could not read its database…" | The database file is damaged or not a NEXUS database. It has not been changed. Move it aside (data folder in [INSTALLATION.md](INSTALLATION.md#where-your-data-lives)) to start fresh, or put back a `nexus.db.before-v<N>` copy. |
