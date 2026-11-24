@@ -235,7 +235,9 @@ pub fn bwrap_args(c: &Confinement, cwd: &Path) -> Vec<OsString> {
     }
     for h in &c.hidden {
         if h.is_dir() {
-            a.extend(["--tmpfs".into(), h.clone().into_os_string()]);
+            // An empty, read-only layer: nothing can be read from the real folder, and writes fail
+            // instead of landing in a throwaway layer (matching the macOS profile).
+            a.extend(["--tmpfs".into(), h.clone().into_os_string(), "--remount-ro".into(), h.clone().into_os_string()]);
         } else {
             a.extend(["--ro-bind".into(), "/dev/null".into(), h.clone().into_os_string()]);
         }
@@ -321,5 +323,10 @@ mod tests {
         let b = bwrap_args(&c, Path::new("/a b"));
         assert!(b.contains(&OsString::from("--unshare-net")) && b.contains(&OsString::from("--die-with-parent")));
         assert_eq!(b.last(), Some(&OsString::from("--")));
+        // A hidden folder is covered by an empty layer that is then made read-only.
+        let dir = std::env::temp_dir();
+        let b = bwrap_args(&Confinement { writable: vec![], hidden: vec![dir.clone()], network: true }, Path::new("/"));
+        let at = b.iter().position(|x| x == "--tmpfs").unwrap();
+        assert_eq!(&b[at + 1..at + 4], &[dir.clone().into_os_string(), "--remount-ro".into(), dir.into_os_string()]);
     }
 }
