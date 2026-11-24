@@ -66,3 +66,21 @@ test("the website fills in the repository, site address and version and leaves n
     assert.doesNotThrow(() => readFileSync(fromDocs ? `docs/${src}` : `website/${src}`), src);
   }
 });
+
+test("the site checker catches broken links, missing metadata and dangling anchors", async () => {
+  const { checkSite } = await import("../scripts/check-site.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "nexus-site-"));
+  const head = '<title>t</title><meta name="description" content="d"><link rel="canonical" href="https://x/"><meta property="og:image" content="https://x/i.png">';
+  writeFileSync(join(dir, "styles.css"), "");
+  writeFileSync(join(dir, "robots.txt"), "");
+  writeFileSync(join(dir, "sitemap.xml"), "");
+  writeFileSync(join(dir, "index.html"), `${head}<a href="#here">ok</a><p id="here"></p><a href="styles.css">ok</a><a href="https://example.com">ok</a>`);
+  assert.deepEqual(checkSite(dir), []);
+  writeFileSync(join(dir, "index.html"), `<title>t</title><img src="assets/missing.png"><a href="#nowhere">x</a>{{VERSION}}`);
+  const problems = checkSite(dir).join("\n");
+  assert.match(problems, /assets\/missing\.png does not exist/);
+  assert.match(problems, /#nowhere points to no element/);
+  assert.match(problems, /unfilled placeholder/);
+  assert.match(problems, /missing <link rel="canonical"/);
+  rmSync(dir, { recursive: true });
+});

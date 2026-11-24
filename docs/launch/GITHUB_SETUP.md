@@ -25,7 +25,15 @@ gh api -X POST repos/yazhiniyanMS/nexus/pages -f build_type=workflow
 
 (Web: Settings → Pages → Source: **GitHub Actions**.) The site will be at `https://yazhiniyanms.github.io/nexus/`.
 
-The `Website` workflow then publishes the site automatically when a release is published. The page describes 0.2.0, so let the 0.2.0 release publish it; running it by hand earlier (`gh workflow run pages.yml`) would show 0.2.0 features next to a 0.1.0 download.
+Root cause of the failed `github-pages` deployment (17 November): the `Website` workflow ran when 0.1.0 was published, and `actions/configure-pages` found no Pages site for the repository (`GET /repos/…/pages` → 404). Nothing in the build was wrong; Pages had never been enabled. The API cannot be enabled from the workflow with its default token, so this one setting is the owner's.
+
+The workflow now deploys **from `main` only** (on a push that changes the site, or by hand on `main`), stops with a clear message if Pages is still off, and pull requests only build and check the site. After enabling Pages, publish with:
+
+```bash
+gh workflow run pages.yml -R yazhiniyanMS/nexus --ref main
+```
+
+Do this after PR #1 is merged; the page states that the current download is 0.1.0 and the described features ship in 0.2.0.
 
 ## 3. Social preview
 
