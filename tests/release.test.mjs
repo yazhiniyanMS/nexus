@@ -84,3 +84,45 @@ test("the site checker catches broken links, missing metadata and dangling ancho
   assert.match(problems, /missing <link rel="canonical"/);
   rmSync(dir, { recursive: true });
 });
+
+test("the adoption report counts installers by system and never counts checksums or the maintainer", async () => {
+  const { summarize, toMarkdown, platformOf } = await import("../scripts/adoption-report.mjs");
+  assert.equal(platformOf("SHA256SUMS.txt"), null);
+  assert.equal(platformOf("NEXUS_0.2.0_amd64.AppImage"), "Linux");
+  const s = summarize({
+    repo: "o/r",
+    owner: "Owner",
+    now: "2026-12-01T00:00:00Z",
+    releases: [{ tag_name: "v1", prerelease: true, assets: [
+      { name: "NEXUS_1_aarch64.dmg", download_count: 3 },
+      { name: "NEXUS_1_x64-setup.exe", download_count: 2 },
+      { name: "NEXUS_1_x64_en-US.msi", download_count: 1 },
+      { name: "NEXUS_1_amd64.deb", download_count: 4 },
+      { name: "SHA256SUMS.txt", download_count: 9 },
+      { name: "release-manifest.json", download_count: 9 },
+    ] }],
+    issues: [
+      { state: "open", user: { login: "owner", type: "User" }, labels: [{ name: "bug" }], created_at: "2026-11-30T00:00:00Z" },
+      { state: "open", user: { login: "someone", type: "User" }, labels: [{ name: "platform-report" }], created_at: "2026-11-29T00:00:00Z" },
+      { state: "closed", user: { login: "dependabot[bot]", type: "Bot" }, labels: [], created_at: "2026-01-01T00:00:00Z", pull_request: { merged_at: "2026-01-02T00:00:00Z" } },
+      { state: "closed", user: { login: "helper", type: "User" }, labels: [], created_at: "2026-11-20T00:00:00Z", pull_request: { merged_at: "2026-11-21T00:00:00Z" } },
+    ],
+    contributors: [{ login: "Owner", type: "User" }, { login: "helper", type: "User" }],
+    views: { count: 10, uniques: 4 },
+    clones: null,
+    referrers: [],
+  });
+  assert.deepEqual(s.installerDownloads, { macOS: 3, Windows: 3, Linux: 4 });
+  assert.equal(s.perRelease[0].installerDownloads, 10);
+  assert.equal(s.issues.total, 2);
+  assert.equal(s.issues.fromOthers, 1);
+  assert.equal(s.issues.platformReports, 1);
+  assert.equal(s.pullRequests.fromOthers, 1);
+  assert.equal(s.pullRequests.mergedFromOthers, 1);
+  assert.equal(s.contributorsOtherThanOwner, 1);
+  s.stars = 5;
+  const md = toMarkdown(s, { at: "2026-11-24T00:00:00Z", stars: 4, installerDownloads: { macOS: 1, Windows: 3, Linux: 4 } });
+  assert.match(md, /\| Stars \| 5 \(\+1\) \|/);
+  assert.match(md, /3 \(\+2\) \/ 3 \(±0\) \/ 4 \(±0\)/);
+  assert.match(md, /not a user/);
+});

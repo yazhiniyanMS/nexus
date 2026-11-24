@@ -28,6 +28,7 @@ body:
       options:
         - label: Installed and started
         - label: Added a project; Overview and the architecture map appeared
+        - label: Saved a codebase report and opened it in a browser
         - label: Search found text in the project
         - label: Git showed changes and a diff
         - label: A terminal opened and ran commands
