@@ -235,7 +235,7 @@ pub(crate) fn find_binary(name: &str, dirs: &[PathBuf], extra: &[PathBuf]) -> Op
 }
 
 // Which entries are pushed depends on the platform, so this cannot be a `vec![...]`.
-#[allow(clippy::vec_init_then_push)]
+#[allow(clippy::vec_init_then_push, unused_mut)]
 fn ollama_binary() -> Option<PathBuf> {
     let mut extra = vec![];
     #[cfg(target_os = "macos")]

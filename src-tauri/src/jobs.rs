@@ -438,7 +438,9 @@ mod tests {
         if sandbox::backend() != &sandbox::Backend::None {
             return true;
         }
-        assert!(std::env::var_os("NEXUS_REQUIRE_SANDBOX").is_none(), "a sandbox backend was required but none was found");
+        // Set and non-empty means required (workflows set it to "" where no backend exists).
+        let required = std::env::var("NEXUS_REQUIRE_SANDBOX").is_ok_and(|v| !v.is_empty());
+        assert!(!required, "a sandbox backend was required but none was found");
         false
     }
 

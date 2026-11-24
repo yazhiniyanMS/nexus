@@ -464,6 +464,7 @@ mod tests {
         assert_eq!(schema_version(&conn).unwrap() as usize, MIGRATIONS.len() + 3, "untouched");
         let tables: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", [], |r| r.get(0)).unwrap();
         assert_eq!(tables, 1, "no migration ran");
+        drop(conn); // Windows cannot delete a folder holding an open database file
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
