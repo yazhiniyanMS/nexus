@@ -25,7 +25,7 @@ For X, Bluesky or Mastodon. One link per post, one or two hashtags at most, atta
    > You can now share the shape of a private codebase without sharing the code: one HTML file with the module graph, hotspots, dependencies and findings. Paths and names, no source. A test checks that no source text ends up in it.
 
 3. **A real finding** (map screenshot of NEXUS itself):
-   > Mapped NEXUS with NEXUS: at three folder levels it's 16 modules and 29 dependencies, and there's a cycle between src, src/components and src/views. Not dangerous, but now I know it's there. What does your project's map look like?
+   > Mapped NEXUS with NEXUS: at three folder levels it's 16 modules, 29 dependencies and two cycles. One is just Rust (lib.rs declares the modules, the modules use crate::). The other is my interface code importing in a circle. Not dangerous, but now I know it's there. What does your project's map look like?
 
 4. **Engineering — sandboxing** (code snippet image):
    > A bubblewrap lesson: mounting a tmpfs over a folder to hide it doesn't stop writes — they land in a throwaway layer and the test still "passes". `--tmpfs dir --remount-ro dir` makes the write fail, which is what you actually want.
