@@ -13,11 +13,11 @@ gh repo edit yazhiniyanMS/nexus \
   --add-topic llm --add-topic tauri --add-topic rust --add-topic react --add-topic desktop-app
 ```
 
-Set the homepage only after step 2 has deployed the site.
+The site is live (step 2 is done), so the homepage can be set now.
 
-## 2. Website (GitHub Pages)
+## 2. Website (GitHub Pages) — done 24 November 2026
 
-The `Website` workflow failed on 17 November because Pages is not enabled. Enable it with GitHub Actions as the source:
+Pages is enabled with GitHub Actions as the source, and the site is live at https://yazhiniyanms.github.io/nexus/ (run 45447910908). For reference, this is how it was enabled:
 
 ```bash
 gh api -X POST repos/yazhiniyanMS/nexus/pages -f build_type=workflow
@@ -33,7 +33,7 @@ The workflow now deploys **from `main` only** (on a push that changes the site, 
 gh workflow run pages.yml -R yazhiniyanMS/nexus --ref main
 ```
 
-Do this after PR #1 is merged; the page states that the current download is 0.1.0 and the described features ship in 0.2.0.
+The improved workflow (main-only deploys, the site check, the clear error) and the site's 0.1.0 notice are in PR #2; the live site updates when that is merged.
 
 ## 3. Social preview
 
@@ -49,11 +49,13 @@ gh api -X PUT repos/yazhiniyanMS/nexus/private-vulnerability-reporting
 
 ## 5. Discussions (optional)
 
-Useful for questions and ideas that are not bugs; leave it off if you will not have time to answer.
+Useful for questions and ideas that are not bugs; leave it off if you will not have time to answer at least weekly.
 
 ```bash
 gh repo edit yazhiniyanMS/nexus --enable-discussions
 ```
+
+Then, in the Discussions tab, keep only four categories: **Q&A** (answerable), **Ideas**, **Show and tell** (what people found in their own codebases with the map or report) and **Announcements** (maintainer-only, one post per release). Pin a welcome post that links the issue forms for bugs and platform reports. Once enabled, change the `blank_issues_enabled`/contact links in `.github/ISSUE_TEMPLATE/config.yml` to point questions there.
 
 ## 6. Labels
 
@@ -68,3 +70,11 @@ done
 ## 7. Release 0.2.0 (after CI passes)
 
 Follow [RELEASES.md](../RELEASES.md): bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (checked by `scripts/check-version.mjs`), move the changelog's Unreleased section under 0.2.0, push, let the pull-request and main workflows pass on all systems, tag `v0.2.0`, review the draft release and its checksums, then publish.
+
+## 8. File the first good first issues
+
+Four are drafted in [CONTRIBUTOR_FUNNEL.md](../project/CONTRIBUTOR_FUNNEL.md#good-first-issues). Filing them is public, so it is left to you; copy each body from that file:
+
+```bash
+gh issue create -R yazhiniyanMS/nexus --label "good first issue" --title "Index Java source files" --body-file -
+```

@@ -26,6 +26,16 @@ Concretely:
 
 Not first: people who want an AI editor with completions (Cursor, Windsurf), or the most capable autonomous agent (Claude Code, OpenHands).
 
+## Three concrete use cases
+
+1. **First day in an unfamiliar repository.** Add the folder, open **Intelligence → Map**: which modules exist, which import which, where the cycles are, which files everything depends on. Then **⌘K** to jump to a symbol and its references. No model, no key, nothing uploaded.
+2. **Explaining a private codebase to someone who can't see it.** A new teammate before access is granted, a reviewer, a mentor, a course instructor: **Overview → Share a report** saves one HTML file with the architecture graph, hotspots, dependencies and findings — paths and names, no source code.
+3. **Trying a local-model agent without handing it your files.** Connect Ollama, give an agent a small task (a missing test, a rename). It plans, writes in a separate Git worktree and stops at each gate; you approve the plan, each command (sandboxed on macOS and Linux) and the final diff, or throw it all away.
+
+## Why try it (the honest pitch)
+
+It costs five minutes and touches nothing: NEXUS reads your project, never changes it unless you approve a diff, and needs no account, key or model for the map and report. If the map tells you something about your own codebase you didn't know — a cycle, a file everything depends on — it was worth it. If it doesn't, uninstall; nothing was sent anywhere.
+
 ## The problem
 
 AI tools made changing code fast and understanding code optional. Agent-first tools start editing before you know what the code looks like, need a cloud model to explain anything, and apply changes to your files with a prompt-by-prompt "allow". Teams cannot easily share the *shape* of a private codebase without sharing the code.
@@ -54,10 +64,10 @@ Not differentiators (do not claim them): "local-first AI desktop app" (OpenCode 
 
 | Blocker | Severity | Status |
 | --- | --- | --- |
-| Released 0.1.0 lacks the report, guided setup, sandboxing and the new interface | High | In `main`; needs CI on Windows/Linux and a 0.2.0 release |
-| Unsigned installers (Gatekeeper and SmartScreen warnings) | High | Needs certificates (paid); documented workaround |
-| No website live (GitHub Pages not enabled) | Medium | Site ready in `website/`; one setting to enable |
-| Repository has no topics, homepage or social preview | Medium | Prepared; needs the owner to apply |
+| Released 0.1.0 lacks the report, guided setup, sandboxing and the new interface | High | In `main`, CI green on macOS, Windows and Linux; needs the 0.2.0 release |
+| Unsigned installers (Gatekeeper and SmartScreen warnings) | High | Needs certificates (paid). Workaround docs corrected for macOS 15+, where right-click → Open no longer works |
+| No website live | Medium | **Fixed 24 Nov 2026**: live at https://yazhiniyanms.github.io/nexus/ |
+| Repository has no topics, homepage or social preview; generic description | Medium | Prepared in [GITHUB_SETUP.md](../launch/GITHUB_SETUP.md); needs the owner to apply |
 | Agents need a capable model; small local models often fail validation | Medium | Documented; roadmap item |
 | Windows has no sandbox; Windows/Linux little hands-on use | Medium | Documented; roadmap item |
 | Not an editor | By design | Positioned as a companion |

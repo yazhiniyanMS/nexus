@@ -9,6 +9,17 @@ Thanks for looking. NEXUS is a one-person project so far, and help is welcome â€
 
 Good first contributions are labelled [`good first issue`](https://github.com/yazhiniyanMS/nexus/labels/good%20first%20issue). If you want to work on something bigger, open an issue first so we can agree on the approach.
 
+## Where to start
+
+| You have | A good first contribution | Needs |
+| --- | --- | --- |
+| 20 minutes, no setup | Install a release on Windows or Linux and send a [platform report](https://github.com/yazhiniyanMS/nexus/issues/new?template=platform_report.yml) | Nothing but the installer |
+| An hour | Fix a place where the docs and the app disagree, or a confusing message in the interface | Node; Rust only to run the app |
+| An evening or two | A [`good first issue`](https://github.com/yazhiniyanMS/nexus/labels/good%20first%20issue) â€” for example remembering the map level per project (TypeScript only) | The full setup below |
+| A weekend | Index support for another language in `src-tauri/src/intel/` (Java and C# are the largest gaps) | Rust |
+
+Every issue and pull request gets a reply within a week. If you are unsure, comment on the issue before you start, so two people don't do the same work.
+
 ## Get the code
 
 ```bash
