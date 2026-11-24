@@ -101,7 +101,7 @@ pub struct AgentEngine {
 }
 
 impl AgentEngine {
-    fn is_active(&self, run_id: &str) -> bool {
+    pub(crate) fn is_active(&self, run_id: &str) -> bool {
         self.active.lock().unwrap_or_else(|e| e.into_inner()).contains_key(run_id)
     }
     pub(crate) fn retry_delay(&self) -> u64 {
@@ -172,6 +172,7 @@ pub(crate) fn load_steps(conn: &Connection, run_id: &str) -> Result<Vec<Step>> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+#[allow(clippy::too_many_arguments)] // one column per argument; a struct would only rename them
 pub(crate) fn insert_step(
     conn: &Connection,
     run_id: &str,
@@ -321,6 +322,16 @@ pub fn create_agent_run<R: Runtime>(
         return Err("Describe the outcome you want in a sentence or more.".into());
     }
     project_root(&state, &project_id)?;
+    {
+        let conn = state.db.conn();
+        let limit = crate::exec::load(&conn).max_queued_agents as i64;
+        let queued: i64 = conn.query_row("SELECT COUNT(*) FROM agent_runs WHERE status = 'queued'", [], |r| r.get(0))?;
+        if queued >= limit {
+            return Err(AppError::Msg(format!(
+                "{queued} agent tasks are already waiting (Settings → Execution allows {limit}). Let some finish or cancel them first."
+            )));
+        }
+    }
     let id = db::new_id();
     {
         let conn = state.db.conn();

@@ -80,7 +80,7 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
   return (
     <div data-testid="bench-suite" data-status={s.status} className="mx-auto w-full max-w-5xl space-y-4 p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="selectable min-w-0 flex-1 truncate text-[15px] font-semibold">{s.name}</h2>
+        <h2 className="selectable min-w-0 flex-1 truncate text-md font-semibold">{s.name}</h2>
         <Badge tone={STATUS_TONE[s.status]}>{s.status}</Badge>
         {running ? (
           <Button size="sm" variant="danger" onClick={() => void api.labBenchCancel(id)}><Square size={11} /> Cancel</Button>
@@ -114,13 +114,13 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
           </div>
           <div><span className="text-faint">Run:</span> {new Date(s.created_at).toLocaleString()} ({timeAgo(s.created_at)})</div>
         </dl>
-        <div className="mt-2 text-[11px] leading-relaxed text-faint">
+        <div className="mt-2 text-2xs leading-relaxed text-faint">
           These figures describe this machine with these settings. They are not comparable with results taken on other hardware, with other settings, or with a different quantization of the same model.
         </div>
       </Card>
 
       <Card>
-        <table data-testid="bench-summary" className="w-full text-[13px]">
+        <table data-testid="bench-summary" className="w-full text-sm">
           <thead className="text-left text-xs text-faint">
             <tr className="border-b border-line">
               <th className="px-3 py-2 font-medium">Model</th>
@@ -142,12 +142,12 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
                   <tr data-target={t.model} className="cursor-default hover:bg-raised/40" onClick={() => setOpen(open === i ? null : i)}>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1 font-mono text-xs">{open === i ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{t.model}</div>
-                      <div className="pl-4 text-[11px] text-faint">{targetLine(t)}</div>
+                      <div className="pl-4 text-2xs text-faint">{targetLine(t)}</div>
                     </td>
                     <td className="pr-3 tabular-nums">{fmtStat(x?.ttft_ms, fmtMs)}</td>
                     <td className="pr-3 tabular-nums">
                       {fmtStat(x?.tokens_per_second, fmtTps)}
-                      {x?.tps_source && x.tps_source !== "runtime" && <span className="text-[11px] text-warn" title="Derived by NEXUS from the reported output tokens and the client's clock"> {x.tps_source}</span>}
+                      {x?.tps_source && x.tps_source !== "runtime" && <span className="text-2xs text-warn" title="Derived by NEXUS from the reported output tokens and the client's clock"> {x.tps_source}</span>}
                     </td>
                     <td className="pr-3 tabular-nums">{fmtStat(x?.total_ms, fmtMs)}</td>
                     <td className="pr-3 tabular-nums">{fmtStat(x?.prompt_eval_ms, fmtMs)}</td>
@@ -158,7 +158,7 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
                   {open === i && (
                     <tr>
                       <td colSpan={8} className="bg-bg px-3 py-2">
-                        <table className="w-full text-xs">
+                        <table className="w-full text-xs [&_td]:pr-3 [&_th]:pr-3">
                           <thead className="text-left text-faint">
                             <tr><th className="py-1 font-medium">Prompt</th><th className="font-medium">Run</th><th className="font-medium">First token</th><th className="font-medium">Total</th><th className="font-medium">Speed</th><th className="font-medium">In</th><th className="font-medium">Out</th><th className="font-medium">Load</th><th className="font-medium">Result</th></tr>
                           </thead>
@@ -177,7 +177,7 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
                                   <td className={clsx(r.status === "error" && "text-danger", r.status === "cancelled" && "text-faint")}>{r.status === "ok" ? "ok" : r.status === "error" ? (r.error ?? "failed") : "cancelled"}</td>
                                 </tr>
                                 {shownOutput === r.id && (
-                                  <tr><td colSpan={9} className="pb-2"><pre className="selectable max-h-48 overflow-auto rounded border border-line bg-panel p-2 font-mono text-[11px] leading-5 whitespace-pre-wrap text-dim">{r.output || "(no output recorded)"}</pre></td></tr>
+                                  <tr><td colSpan={9} className="pb-2"><pre className="selectable max-h-48 overflow-auto rounded border border-line bg-panel p-2 font-mono text-2xs leading-5 whitespace-pre-wrap text-dim">{r.output || "(no output recorded)"}</pre></td></tr>
                                 )}
                               </Fragment>
                             ))}
@@ -193,7 +193,7 @@ function SuiteView({ ctx, id, onDeleted }: { ctx: LabCtx; id: string; onDeleted:
           </tbody>
         </table>
       </Card>
-      <div className="text-[11px] leading-relaxed text-faint">
+      <div className="text-2xs leading-relaxed text-faint">
         Each cell is the median, with the range and number of measured runs. Warm-up requests are listed but not counted. A dash means the runtime did not report the value.
         {anyDerived && " Speeds marked derived were computed by NEXUS from the runtime's reported output tokens and the time after the first token, because that runtime does not time its own generation."}
       </div>
@@ -274,8 +274,8 @@ function NewBenchmark({ ctx, target, onStarted }: { ctx: LabCtx; target: LabTarg
   return (
     <form data-testid="bench-form" className="mx-auto w-full max-w-3xl space-y-5 p-5" onSubmit={(e) => { e.preventDefault(); void start(); }}>
       <div>
-        <h2 className="text-[15px] font-semibold">New benchmark</h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-dim">Every model gets the same prompts and settings, one request at a time, so the measurements can be compared. Nothing here is estimated.</p>
+        <h2 className="text-md font-semibold">New benchmark</h2>
+        <p className="mt-1 text-sm leading-relaxed text-dim">Every model gets the same prompts and settings, one request at a time, so the measurements can be compared. Nothing here is estimated.</p>
       </div>
       <ErrorBanner message={error} />
 
@@ -303,7 +303,7 @@ function NewBenchmark({ ctx, target, onStarted }: { ctx: LabCtx; target: LabTarg
           <div key={i} className="space-y-1 rounded-md border border-line p-2">
             <div className="flex items-center gap-2">
               <Input aria-label={`Prompt ${i + 1} label`} className="w-48!" placeholder={`Prompt ${i + 1}`} value={p.label} onChange={(e) => setPrompts((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-              <span className="text-[11px] text-faint">{p.text.length.toLocaleString()} characters</span>
+              <span className="text-2xs text-faint">{p.text.length.toLocaleString()} characters</span>
               {prompts.length > 1 && <button type="button" aria-label="Remove prompt" className="ml-auto grid size-6 place-items-center rounded text-faint hover:bg-raised hover:text-ink" onClick={() => setPrompts((list) => list.filter((_, j) => j !== i))}><X size={12} /></button>}
             </div>
             <textarea
@@ -335,7 +335,7 @@ function NewBenchmark({ ctx, target, onStarted }: { ctx: LabCtx; target: LabTarg
         <div className="space-y-2">
           <div className="text-xs font-semibold">Settings for every model</div>
           <ParamsEditor kind={kind} value={params} onChange={setParams} onError={setParamError} />
-          {uneven.length > 0 && <div className="text-[11px] leading-relaxed text-warn">Not every chosen runtime accepts {uneven.join(", ").replace(/_/g, "-")}; it is only sent where supported, which affects how comparable the results are.</div>}
+          {uneven.length > 0 && <div className="text-2xs leading-relaxed text-warn">Not every chosen runtime accepts {uneven.join(", ").replace(/_/g, "-")}; it is only sent where supported, which affects how comparable the results are.</div>}
           <textarea aria-label="Benchmark system prompt" rows={2} value={system} onChange={(e) => setSystem(e.target.value)} placeholder="Optional system prompt, sent to every model" className="w-full resize-y rounded-md border border-line bg-bg p-2 text-xs placeholder:text-faint focus:border-lav/60 focus:outline-none" />
         </div>
       </div>
@@ -383,7 +383,7 @@ export default function BenchmarksTab({ ctx, target }: { ctx: LabCtx; target: La
                 <span className={clsx("size-1.5 shrink-0 rounded-full", s.status === "completed" ? "bg-accent" : s.status === "running" ? "animate-pulse bg-lav" : s.status === "failed" ? "bg-danger" : "bg-faint")} />
                 <span className="truncate text-xs font-medium">{s.name}</span>
               </div>
-              <div className="truncate pl-3 text-[11px] text-faint">{s.models.length} model{s.models.length === 1 ? "" : "s"} · {s.runs} requests · {timeAgo(s.created_at)}</div>
+              <div className="truncate pl-3 text-2xs text-faint">{s.models.length} model{s.models.length === 1 ? "" : "s"} · {s.runs} requests · {timeAgo(s.created_at)}</div>
             </button>
           ))}
         </div>

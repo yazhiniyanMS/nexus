@@ -1,29 +1,48 @@
 import clsx from "clsx";
 import { listen } from "@tauri-apps/api/event";
-import { AlertTriangle, Ban, Check, CircleDashed, Eye, FileDiff, Loader2, Pause, Play, Plus, ShieldAlert, SkipForward, Square, Terminal, Trash2, Workflow, X } from "lucide-react";
+import { AlertTriangle, Check, Eye, FileDiff, Minus, Pause, Play, Plus, Square, Terminal, Trash2, Workflow } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Workspace } from "../App";
 import { ModelChoiceControls, ModelChoiceNotice, useModelChoice } from "../components/ModelChoice";
-import { Badge, Button, Card, DiffView, Empty, ErrorBanner, Field, Select, Spinner, Tabs } from "../components/ui";
-import { AGENT_CHANGED, AGENT_OUTPUT, api, type AgentDiff, type AgentRun, type AgentRunDetail, type AgentRunStatus, type AgentStep, type AgentStepStatus, type Provider, type RoleInfo } from "../lib/api";
-import { confirmAction } from "../lib/importProject";
+import { Badge, Button, ConfirmButton, DiffView, Empty, ErrorBanner, Field, Select, Spinner, Status, Tabs, ViewHeader, type StatusKind } from "../components/ui";
+import { ExecNote } from "../components/ExecNote";
+import { AGENT_CHANGED, AGENT_OUTPUT, api, type AgentDiff, type AgentRun, type AgentRunDetail, type AgentStep, type AgentStepStatus, type Provider, type RoleInfo } from "../lib/api";
 import { errorText, timeAgo, useAsync } from "../lib/util";
 
-type Tone = "neutral" | "green" | "red" | "amber" | "blue";
-const runTone: Record<AgentRunStatus, Tone> = { queued: "neutral", running: "blue", paused: "amber", completed: "green", failed: "red", cancelled: "neutral", rejected: "neutral", discarded: "neutral", interrupted: "amber" };
-const roleStyle: Record<string, string> = {
-  architect: "text-lav border-lav/30 bg-lav/10",
-  research: "text-lav border-lav/30 bg-lav/10",
-  developer: "text-accent border-accent/30 bg-accent/10",
-  testing: "text-warn border-warn/30 bg-warn/10",
-  review: "text-danger border-danger/30 bg-danger/10",
-  user: "text-ink border-line bg-raised",
-  engine: "text-dim border-line bg-raised",
+/** Run states as the shared Status component shows them. "Needs you" wins over the run's own state. */
+export function runKind(r: AgentRun): StatusKind {
+  if (r.pending_approvals > 0 && r.status === "running") return "waiting";
+  switch (r.status) {
+    case "queued": return "queued";
+    case "running": return "running";
+    case "paused": case "interrupted": return "waiting";
+    case "completed": return "done";
+    case "failed": return "failed";
+    default: return "cancelled";
+  }
+}
+const runLabel = (r: AgentRun) =>
+  r.pending_approvals > 0 && r.status === "running" ? "Needs approval" : r.status === "interrupted" ? "Interrupted" : r.status === "paused" ? "Paused" : r.status === "rejected" ? "Rejected" : r.status === "discarded" ? "Discarded" : undefined;
+
+const stepKind: Record<AgentStepStatus, StatusKind> = {
+  pending: "idle", running: "running", awaiting_approval: "waiting", completed: "done", failed: "failed", skipped: "cancelled", rejected: "cancelled", cancelled: "cancelled",
 };
-const ACTIVE: AgentRunStatus[] = ["queued", "running", "paused", "interrupted", "failed"];
+const stepLabel: Partial<Record<AgentStepStatus, string>> = { awaiting_approval: "Needs approval", skipped: "Skipped", rejected: "Rejected", pending: "Pending" };
+
+/** How long a run has taken, or has been going. */
+export function runDuration(r: { created_at: string; finished_at: string | null }, now = Date.now()): string {
+  const ms = (r.finished_at ? new Date(r.finished_at).getTime() : now) - new Date(r.created_at).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${Math.floor(h / 24)}d`;
+}
 
 function RoleTag({ role }: { role: string }) {
-  return <span className={clsx("inline-flex rounded-full border px-2 py-px text-[11px] font-medium capitalize", roleStyle[role] ?? roleStyle.engine)}>{role === "user" ? "you" : role}</span>;
+  return <span className="inline-flex w-20 shrink-0 text-xs font-medium text-dim capitalize">{role === "user" ? "you" : role}</span>;
 }
 
 function parse<T>(text: string): T | null {
@@ -34,89 +53,119 @@ function parse<T>(text: string): T | null {
   }
 }
 
-function StepIcon({ status }: { status: AgentStepStatus }) {
-  const map: Record<AgentStepStatus, ReactNode> = {
-    pending: <CircleDashed size={15} className="text-faint" />,
-    running: <Loader2 size={15} className="animate-spin text-lav" />,
-    awaiting_approval: <ShieldAlert size={15} className="text-warn" />,
-    completed: <Check size={15} className="text-accent" />,
-    failed: <X size={15} className="text-danger" />,
-    skipped: <SkipForward size={15} className="text-faint" />,
-    rejected: <Ban size={15} className="text-faint" />,
-    cancelled: <Ban size={15} className="text-faint" />,
-  };
-  return <>{map[status]}</>;
-}
 
 // ------------------------------------------------------------------ overview
 
-function Overview({ roles, runs, providers: allProviders, ws, onNew }: { roles: RoleInfo[]; runs: AgentRun[]; providers: Provider[]; ws: Workspace; onNew: () => void }) {
+const BOARD: { title: string; match: (r: AgentRun) => boolean; hint: string }[] = [
+  { title: "Needs your approval", match: (r) => r.status === "running" && r.pending_approvals > 0, hint: "A plan, a command or the final diff is waiting for you." },
+  { title: "Running", match: (r) => r.status === "running" && r.pending_approvals === 0, hint: "" },
+  { title: "Queued", match: (r) => r.status === "queued", hint: "Two tasks run at a time." },
+  { title: "Paused or interrupted", match: (r) => r.status === "paused" || r.status === "interrupted", hint: "Resume to continue from the last finished step." },
+  { title: "Failed", match: (r) => r.status === "failed", hint: "Open one to see the error; most can be resumed." },
+  { title: "Finished", match: (r) => ["completed", "cancelled", "rejected", "discarded"].includes(r.status), hint: "" },
+];
+
+const CAPS: { key: keyof Pick<RoleInfo, "can_read" | "can_write_workspace" | "can_run_commands">; label: string }[] = [
+  { key: "can_read", label: "Read project" },
+  { key: "can_write_workspace", label: "Write isolated copy" },
+  { key: "can_run_commands", label: "Run approved commands" },
+];
+
+function Overview({ roles, runs, providers: allProviders, ws, onNew, onOpen }: {
+  roles: RoleInfo[]; runs: AgentRun[]; providers: Provider[]; ws: Workspace; onNew: () => void; onOpen: (id: string) => void;
+}) {
   // Only connections that are switched on can run agents.
   const providers = allProviders.filter((p) => p.enabled);
-  const waiting = runs.reduce((n, r) => n + (r.status === "running" ? r.pending_approvals : 0), 0);
+  const [now, setNow] = useState(Date.now());
+  const anyLive = runs.some((r) => ["running", "queued"].includes(r.status));
+  useEffect(() => {
+    if (!anyLive) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [anyLive]);
+
   return (
     <div className="flex-1 overflow-auto">
-      <div className="mx-auto max-w-5xl space-y-5 p-6">
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <h1 className="text-[17px] font-semibold">Agent Command Center</h1>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-dim">
-              Describe an outcome. Five specialised agents research, plan, implement, test and review it in an isolated copy of your repository.
-              Nothing runs and nothing reaches your project without your approval.
-            </p>
-          </div>
-          <Button variant="primary" onClick={onNew} disabled={providers.length === 0 || ws.projects.length === 0}><Plus size={14} /> New agent task</Button>
-        </div>
-
+      <div className="mx-auto max-w-5xl space-y-6 px-6 py-5">
         {providers.length === 0 && (
-          <Card className="border-warn/30 p-4" >
-            <div className="flex items-start gap-3" data-testid="agent-setup">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" />
-              <div className="flex-1 text-[13px] leading-relaxed">
-                <div className="font-semibold">Agents need a model</div>
-                <div className="mt-0.5 text-dim">
-                  {allProviders.length === 0 ? "No model connection is configured" : "Every model connection is disabled"}, so agents cannot run yet.
-                  Model Lab finds local runtimes such as Ollama on this machine and lets you add other connections. The rest of NEXUS keeps working without one.
-                </div>
+          <div className="flex items-start gap-3 rounded-md border border-warn/30 bg-warn/5 p-3" data-testid="agent-setup">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" />
+            <div className="flex-1 text-sm leading-relaxed">
+              <div className="font-medium">Agents need a model</div>
+              <div className="text-dim">
+                {allProviders.length === 0 ? "No model connection is configured" : "Every model connection is disabled"}. Model Lab finds local runtimes such as Ollama on this machine; other connections are added in Settings. The rest of NEXUS works without one.
               </div>
-              <Button onClick={() => ws.go("models")}>Open Model Lab</Button>
             </div>
-          </Card>
-        )}
-        {providers.length > 0 && ws.projects.length === 0 && (
-          <Card className="p-4 text-[13px] text-dim">Import a project first. Agents work on a Git repository with at least one commit.</Card>
-        )}
-
-        <div className="grid grid-cols-3 gap-3">
-          {[["Active tasks", runs.filter((r) => ["queued", "running", "paused"].includes(r.status)).length], ["Waiting for your approval", waiting], ["Completed", runs.filter((r) => r.status === "completed").length]].map(([k, v]) => (
-            <Card key={k} className="p-4">
-              <div className="text-xs text-dim">{k}</div>
-              <div className={clsx("mt-1 text-2xl font-semibold tabular-nums", k === "Waiting for your approval" && Number(v) > 0 && "text-warn")}>{v}</div>
-            </Card>
-          ))}
-        </div>
-
-        <div>
-          <div className="mb-2 text-xs font-semibold text-dim">The team</div>
-          <div className="grid grid-cols-5 gap-3" data-testid="agent-roles">
-            {roles.map((r) => (
-              <Card key={r.id} className="flex flex-col p-3.5">
-                <RoleTag role={r.id} />
-                <ul className="mt-2.5 flex-1 space-y-1 text-xs leading-snug text-dim">
-                  {r.responsibilities.map((x) => <li key={x}>{x}</li>)}
-                </ul>
-                <div className="mt-3 space-y-0.5 border-t border-line pt-2 text-[11px]">
-                  {[["Read project", r.can_read], ["Write to workspace", r.can_write_workspace], ["Run approved commands", r.can_run_commands]].map(([label, ok]) => (
-                    <div key={String(label)} className={clsx("flex items-center gap-1.5", ok ? "text-ink" : "text-faint line-through")}>
-                      {ok ? <Check size={11} className="text-accent" /> : <X size={11} />} {label}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))}
+            <Button size="sm" onClick={() => ws.go("models")}>Open Model Lab</Button>
           </div>
-          <p className="mt-2 text-xs text-faint">No agent can write to your project. Only you can, by approving the final diff.</p>
-        </div>
+        )}
+        {providers.length > 0 && ws.projects.length === 0 && <p className="text-sm text-dim">Import a project first. Agents work on a Git repository with at least one commit.</p>}
+
+        {runs.length === 0 ? (
+          <div className="py-10 text-center">
+            <Workflow size={26} className="mx-auto text-faint" />
+            <div className="mt-2 text-md font-semibold">No agent tasks yet</div>
+            <p className="mx-auto mt-1 max-w-md text-sm text-dim">
+              Describe an outcome. Agents research, plan, implement, test and review it in an isolated copy of the repository. You approve the plan, every command and the final diff.
+            </p>
+            <Button className="mt-4" variant="primary" onClick={onNew} disabled={providers.length === 0 || ws.projects.length === 0}><Plus size={14} /> New agent task</Button>
+          </div>
+        ) : (
+          <div className="space-y-5" data-testid="agent-board">
+            {BOARD.map((g) => {
+              const items = runs.filter(g.match);
+              if (items.length === 0) return null;
+              return (
+                <section key={g.title} aria-label={g.title}>
+                  <div className="mb-1 flex items-baseline gap-2">
+                    <h2 className={clsx("text-xs font-semibold", g.title === "Needs your approval" ? "text-warn" : g.title === "Failed" ? "text-danger" : "text-dim")}>{g.title}</h2>
+                    <span className="text-2xs text-faint">{items.length}</span>
+                    {g.hint && <span className="text-2xs text-faint">· {g.hint}</span>}
+                  </div>
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y divide-line/60 border-y border-line/60">
+                      {items.map((r) => (
+                        <tr key={r.id} data-run={r.status} className="cursor-default hover:bg-raised/50" onClick={() => onOpen(r.id)}>
+                          <td className="w-36 py-2 pl-1"><Status kind={runKind(r)} label={runLabel(r)} /></td>
+                          <td className="max-w-0 py-2 pr-3"><div className="truncate">{r.title}</div>{r.error && r.status === "failed" && <div className="truncate text-2xs text-danger">{r.error}</div>}</td>
+                          <td className="w-40 truncate py-2 pr-3 text-xs text-dim">{r.project_name ?? "project removed"}</td>
+                          <td className="w-44 truncate py-2 pr-3 font-mono text-2xs text-faint">{r.model ?? "—"}</td>
+                          <td className="w-20 py-2 text-right text-xs text-dim tabular-nums" title="Duration">{runDuration(r, now)}</td>
+                          <td className="w-24 py-2 pr-1 text-right text-2xs text-faint">{timeAgo(r.updated_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              );
+            })}
+          </div>
+        )}
+
+        <section aria-label="Agent permissions">
+          <div className="mb-1 flex items-baseline gap-2">
+            <h2 className="text-xs font-semibold text-dim">What each agent may do</h2>
+            <span className="text-2xs text-faint">· no agent can write to your project; only your approval of the final diff can</span>
+          </div>
+          <table className="w-full text-xs" data-testid="agent-roles">
+            <thead className="text-left text-faint">
+              <tr className="border-b border-line"><th className="py-1.5 pl-1 font-medium">Agent</th><th className="font-medium">Does</th>{CAPS.map((c) => <th key={c.key} className="w-36 text-center font-medium">{c.label}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {roles.map((r) => (
+                <tr key={r.id}>
+                  <td className="w-24 py-1.5 pl-1 font-medium capitalize">{r.name}</td>
+                  <td className="py-1.5 pr-3 text-dim">{r.responsibilities.join(" · ")}</td>
+                  {CAPS.map((c) => (
+                    <td key={c.key} className="text-center">
+                      {r[c.key] ? <Check size={13} className="inline text-ok" aria-label="allowed" /> : <Minus size={13} className="inline text-faint" aria-label="not allowed" />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       </div>
     </div>
   );
@@ -150,7 +199,7 @@ function NewRun({ ws, providers, onCreated, onCancel }: { ws: Workspace; provide
           }
         }}
       >
-        <h2 className="text-[15px] font-semibold">New agent task</h2>
+        <h2 className="text-md font-semibold">New agent task</h2>
         <ErrorBanner message={error} />
         <Field label="Desired outcome" hint="Describe what should be true when the task is done. The Architect turns this into a plan you approve before anything is written.">
           <textarea
@@ -160,7 +209,7 @@ function NewRun({ ws, providers, onCreated, onCancel }: { ws: Workspace; provide
             onChange={(e) => setOutcome(e.target.value)}
             rows={5}
             placeholder="e.g. Add a --json flag to the export command that prints the report as JSON, with a test."
-            className="w-full rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
+            className="w-full rounded-md border border-line bg-bg p-2.5 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none"
           />
         </Field>
         <Field label="Project" hint="Agents work in an isolated copy at the project's current commit. Uncommitted changes are not included and are never modified.">
@@ -193,7 +242,7 @@ interface Review { verdict: string; summary: string; issues: { severity: string;
 
 function PlanBody({ plan }: { plan: Plan }) {
   return (
-    <div className="selectable space-y-3 text-[13px] leading-relaxed">
+    <div className="selectable space-y-3 text-sm leading-relaxed">
       {plan.analysis && <p className="text-dim">{plan.analysis}</p>}
       {plan.issues.length > 0 && (
         <div>
@@ -239,7 +288,7 @@ function StepCard({ step, steps, run, live, ws, act, showChanges }: {
   if (step.kind === "research" && step.status === "completed") {
     const r = parse<Research>(step.output);
     body = r && (
-      <div className="space-y-2 text-[13px] leading-relaxed">
+      <div className="space-y-2 text-sm leading-relaxed">
         <p className="selectable text-dim">{r.summary}</p>
         {r.sources.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -266,7 +315,7 @@ function StepCard({ step, steps, run, live, ws, act, showChanges }: {
   } else if (step.kind === "develop" && step.status === "completed") {
     const d = parse<{ summary: string; files: AgentDiff["files"] }>(step.output);
     body = d && (
-      <div className="space-y-2 text-[13px]">
+      <div className="space-y-2 text-sm">
         <p className="selectable text-dim">{d.summary || "No summary given."}</p>
         {d.files.length === 0 ? <div className="text-xs text-faint">No files were changed.</div> : (
           <button onClick={showChanges} className="flex flex-wrap gap-1.5 text-left">
@@ -289,8 +338,9 @@ function StepCard({ step, steps, run, live, ws, act, showChanges }: {
         </div>
         {waiting && (
           <div className="flex items-center gap-3">
-            <div className="flex-1 text-xs text-warn">
-              Runs in the isolated workspace with credential-like environment variables removed. Network access is not blocked.
+            <div className="flex-1 space-y-1 text-xs text-warn">
+              <div>Runs in this task's own copy of the project, not in your project folder.</div>
+              <ExecNote kind="agent" />
               {spec.risk === "high" && <div className="mt-1 flex items-center gap-1.5 font-medium text-danger"><AlertTriangle size={13} /> This command can delete data or use elevated privileges. Read it carefully.</div>}
             </div>
             <Button size="sm" onClick={() => decide(false)}>Skip</Button>
@@ -303,7 +353,7 @@ function StepCard({ step, steps, run, live, ws, act, showChanges }: {
   } else if (step.kind === "review" && step.status === "completed") {
     const r = parse<Review>(step.output);
     body = r && (
-      <div className="space-y-2 text-[13px] leading-relaxed">
+      <div className="space-y-2 text-sm leading-relaxed">
         <div className="flex items-center gap-2">
           <Badge tone={r.verdict === "approve" ? "green" : r.verdict === "no_changes" ? "neutral" : "amber"}>{r.verdict === "approve" ? "approves" : r.verdict === "no_changes" ? "nothing to review" : "changes requested"}</Badge>
         </div>
@@ -341,17 +391,17 @@ function StepCard({ step, steps, run, live, ws, act, showChanges }: {
   }
 
   return (
-    <Card className={clsx("overflow-hidden", waiting && "border-warn/40")} >
+    <div className={clsx("border-b border-line/60", waiting && "border-l-2 border-l-warn bg-warn/[0.04]")}>
       <div className="flex items-center gap-3 px-4 py-2.5" data-step={step.kind} data-status={step.status}>
-        <StepIcon status={step.status} />
+        <Status kind={stepKind[step.status]} label={stepLabel[step.status]} showLabel={false} />
         <RoleTag role={step.role} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{step.title}</span>
-        {step.attempts > 1 && <span className="text-[11px] text-warn">{step.attempts} attempts</span>}
-        <span className="text-[11px] text-faint">{step.status.replace("_", " ")}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{step.title}</span>
+        {step.attempts > 1 && <span className="text-2xs text-warn">{step.attempts} attempts</span>}
+        <span className={clsx("text-2xs", step.status === "awaiting_approval" ? "font-medium text-warn" : "text-faint")}>{stepLabel[step.status] ?? step.status.replace("_", " ")}</span>
       </div>
-      {step.error && <div className="selectable border-t border-line px-4 py-2 text-xs text-danger">{step.error}</div>}
-      {body && <div className={clsx("border-t px-4 py-3", waiting ? "border-warn/30 bg-warn/5" : "border-line")}>{body}</div>}
-    </Card>
+      {step.error && <div className="selectable px-4 pb-2.5 pl-[7.75rem] text-xs text-danger">{step.error}</div>}
+      {body && <div className="px-4 pb-3 pl-[7.75rem]">{body}</div>}
+    </div>
   );
 }
 
@@ -401,42 +451,40 @@ function RunView({ id, ws, onDeleted, onChanged }: { id: string; ws: Workspace; 
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="shrink-0 border-b border-line px-5 py-3">
         <div className="flex items-center gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{run.title}</h1>
-          {run.pending_approvals > 0 && run.status === "running" && <Badge tone="amber">needs your approval</Badge>}
-          <Badge tone={runTone[run.status]}>{run.status}</Badge>
+          <h1 className="min-w-0 flex-1 truncate text-md font-semibold">{run.title}</h1>
+          <Status kind={runKind(run)} label={runLabel(run)} />
           {run.status === "running" && <Button size="sm" onClick={() => act(() => api.agentPause(run.id))} title="Pause before the next step"><Pause size={12} /> Pause</Button>}
           {["paused", "failed", "interrupted"].includes(run.status) && <Button size="sm" variant="primary" onClick={() => act(() => api.agentResume(run.id))}><Play size={12} /> Resume</Button>}
           {(live_ || run.status === "interrupted" || run.status === "failed") && <Button size="sm" variant="danger" onClick={() => act(() => api.agentCancel(run.id))}><Square size={11} /> Cancel</Button>}
           {!live_ && (
-            <Button
-              size="sm"
-              variant="ghost"
+            <ConfirmButton
+              label=""
+              icon={<Trash2 size={13} />}
               title="Delete task and its history"
-              onClick={async () => {
-                if (await confirmAction(`Delete “${run.title}” and its history? Your project is not affected.`)) {
-                  await api.deleteAgentRun(run.id).then(onDeleted).catch((e) => setError(errorText(e)));
-                }
-              }}
-            >
-              <Trash2 size={13} />
-            </Button>
+              confirm="Delete task — project not affected"
+              onConfirm={() => api.deleteAgentRun(run.id).then(onDeleted).catch((e) => setError(errorText(e)))}
+            />
           )}
         </div>
-        <div className="mt-1 text-xs text-dim">
-          {run.project_name} · {run.provider_name ?? "provider removed"}{run.model ? ` · ${run.model}` : ""} · started {timeAgo(run.created_at)}
+        <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-dim">
+          <span>{run.project_name ?? "project removed"}</span>
+          <span className="font-mono">{run.provider_name ?? "connection removed"}{run.model ? ` · ${run.model}` : ""}</span>
+          <span>started {timeAgo(run.created_at)}</span>
+          <span className="tabular-nums">{run.finished_at ? `took ${runDuration(run)}` : `running for ${runDuration(run)}`}</span>
+          <span>{steps.filter((x) => x.status === "completed").length} of {steps.length} steps done</span>
         </div>
-        <p className="selectable mt-2 max-h-16 overflow-auto text-[13px] leading-relaxed whitespace-pre-wrap text-dim">{run.outcome}</p>
+        {run.outcome.trim() !== run.title.trim() && <p className="selectable mt-2 max-h-16 overflow-auto text-sm leading-relaxed whitespace-pre-wrap text-dim">{run.outcome}</p>}
       </header>
       <Tabs
         value={tab}
         onChange={setTab}
         tabs={[{ id: "timeline", label: "Timeline" }, { id: "changes", label: "Changes", count: diff?.files.length }, { id: "logs", label: "Logs", count: events.length }]}
       />
-      <div className="empty:hidden p-3 pb-0"><ErrorBanner message={error ?? (run.status === "failed" || run.status === "interrupted" ? run.error : null)} /></div>
+      <div className="empty:hidden p-3 pb-0"><ErrorBanner message={error ?? ((run.status === "failed" || run.status === "interrupted") && !steps.some((x) => x.error && x.error === run.error) ? run.error : null)} /></div>
 
       {tab === "timeline" && (
-        <div className="flex-1 space-y-2.5 overflow-auto p-5" data-testid="agent-timeline">
-          {run.status === "queued" && <div className="text-xs text-dim">Queued. It starts when another task finishes (two run at a time).</div>}
+        <div className="flex-1 overflow-auto pb-5" data-testid="agent-timeline">
+          {run.status === "queued" && <div className="px-4 py-2 text-xs text-dim">Queued. It starts when another task finishes (two run at a time).</div>}
           {steps.map((s) => (
             <StepCard key={s.id} step={s} steps={steps} run={run} live={live[s.id]} ws={ws} act={act} showChanges={() => setTab("changes")} />
           ))}
@@ -506,33 +554,31 @@ export default function AgentsView({ ws }: { ws: Workspace }) {
   }, []);
 
   const list = runs.data ?? [];
-  const groups = useMemo(() => [
-    ["Active", list.filter((r) => ACTIVE.includes(r.status))] as const,
-    ["History", list.filter((r) => !ACTIVE.includes(r.status))] as const,
-  ], [list]);
+  const groups = useMemo(() => BOARD.map((g) => [g.title, list.filter(g.match)] as const), [list]);
   const canCreate = (providers.data ?? []).some((p) => p.enabled) && ws.projects.length > 0;
 
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-64 shrink-0 flex-col border-r border-line">
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-          <span className="text-[13px] font-semibold">Agents</span>
-          <Button size="sm" variant="primary" disabled={!canCreate} title={canCreate ? undefined : "Needs an AI provider and a project"} onClick={() => setSelected("new")}><Plus size={13} /> New</Button>
-        </div>
+        <ViewHeader
+          title="Agents"
+          actions={<Button size="sm" variant="primary" disabled={!canCreate} title={canCreate ? "New agent task" : "Needs a model connection and a project"} onClick={() => setSelected("new")}><Plus size={13} /> New</Button>}
+        />
         <div className="flex-1 overflow-auto p-2">
-          <button onClick={() => setSelected("overview")} className={clsx("mb-1 flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium", selected === "overview" ? "bg-raised" : "text-dim hover:bg-raised/60")}>
-            <Workflow size={14} /> Overview
+          <button onClick={() => setSelected("overview")} aria-current={selected === "overview" ? "page" : undefined} className={clsx("mb-1 flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-sm font-medium", selected === "overview" ? "bg-raised text-ink" : "text-dim hover:bg-raised/60")}>
+            <Workflow size={14} /> All tasks
+            <span className="ml-auto text-2xs text-faint">{list.length || ""}</span>
           </button>
           {groups.map(([title, items]) => items.length > 0 && (
             <div key={title}>
-              <div className="px-2.5 pt-3 pb-1 text-[11px] font-medium text-faint">{title}</div>
+              <div className="px-2.5 pt-3 pb-1 text-2xs font-medium text-faint">{title}</div>
               {items.map((r) => (
-                <button key={r.id} onClick={() => setSelected(r.id)} className={clsx("mb-0.5 block w-full rounded-md px-2.5 py-2 text-left", selected === r.id ? "bg-raised" : "hover:bg-raised/60")}>
-                  <div className="truncate text-[13px] font-medium">{r.title}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-faint">
-                    {r.pending_approvals > 0 && r.status === "running" ? <Badge tone="amber">needs approval</Badge> : <Badge tone={runTone[r.status]}>{r.status}</Badge>}
-                    <span className="ml-auto truncate">{r.project_name}</span>
-                  </div>
+                <button key={r.id} onClick={() => setSelected(r.id)} className={clsx("mb-0.5 flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left", selected === r.id ? "bg-raised" : "hover:bg-raised/60")}>
+                  <Status kind={runKind(r)} label={runLabel(r)} showLabel={false} className="mt-[3px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{r.title}</span>
+                    <span className="block truncate text-2xs text-faint">{r.project_name} · {timeAgo(r.updated_at)}</span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -542,7 +588,7 @@ export default function AgentsView({ ws }: { ws: Workspace }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="empty:hidden p-3"><ErrorBanner message={runs.error ?? providers.error} /></div>
         {selected === "overview" ? (
-          !roles.data || !providers.data ? <Spinner /> : <Overview roles={roles.data} runs={list} providers={providers.data} ws={ws} onNew={() => setSelected("new")} />
+          !roles.data || !providers.data ? <Spinner /> : <Overview roles={roles.data} runs={list} providers={providers.data} ws={ws} onNew={() => setSelected("new")} onOpen={setSelected} />
         ) : selected === "new" ? (
           <NewRun ws={ws} providers={providers.data ?? []} onCancel={() => setSelected("overview")} onCreated={(r) => { void runs.reload(); setSelected(r.id); }} />
         ) : (

@@ -3,138 +3,169 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NEXUS: a local-first developer workspace</title>
-<meta name="description" content="NEXUS is a local-first developer workspace for macOS, Windows and Linux: code intelligence, search, Git, a real terminal, local models and approval-gated agents. Public beta.">
+<title>NEXUS — understand a codebase locally, change it only through you</title>
+<meta name="description" content="NEXUS is a free, open-source desktop app for macOS, Windows and Linux. It maps any codebase without AI — architecture, dependency cycles, hotspots, a shareable report — and runs AI agents as approval-gated proposals in an isolated Git worktree, with local models.">
+<link rel="canonical" href="{{SITE_URL}}">
+<meta name="theme-color" content="#060607">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NEXUS">
+<meta property="og:title" content="NEXUS — understand a codebase locally, change it only through you">
+<meta property="og:description" content="Open-source desktop workspace: a codebase map without AI, a shareable report with no source code, and AI agents that wait for your approval. Works with local models.">
+<meta property="og:url" content="{{SITE_URL}}">
+<meta property="og:image" content="{{SITE_URL}}assets/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"NEXUS","applicationCategory":"DeveloperApplication","operatingSystem":"macOS, Windows, Linux","softwareVersion":"{{VERSION}}","license":"https://opensource.org/licenses/MIT","url":"{{SITE_URL}}","downloadUrl":"{{RELEASES_URL}}","codeRepository":"{{REPO_URL}}","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"A local-first desktop workspace that maps codebases without AI and runs AI agents as approval-gated proposals."}
+</script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap">
-  <a class="brand" href="#top"><span class="mark">N</span>NEXUS</a>
+  <a class="brand" href="#top" aria-label="NEXUS home"><span class="mark" aria-hidden="true">N</span>NEXUS</a>
   <nav class="links" aria-label="Sections">
-    <a href="#features">Features</a><a href="#platforms">Platforms</a><a href="#download">Download</a><a href="#install">Install</a><a href="#privacy">Privacy</a><a href="#feedback">Feedback</a><a href="{{REPO_URL}}">GitHub</a>
+    <a href="#features">Features</a><a href="#why">Why NEXUS</a><a href="#start">Get started</a><a href="#roadmap">Roadmap</a><a href="#faq">FAQ</a><a href="{{REPO_URL}}">GitHub</a>
   </nav>
 </div></header>
 
-<main id="top">
-<div class="wrap hero">
-  <span class="tag">Public beta · version {{VERSION}}</span>
-  <h1>One workspace for understanding, running and changing your code. On your machine.</h1>
-  <p class="lead">NEXUS brings code intelligence, search, Git, a real terminal, local models and approval-gated agents into one desktop app. It works without an account and without an AI key, and your code stays on your computer.</p>
+<main id="main">
+<div class="wrap hero" id="top">
+  <span class="tag">Open source · MIT · beta {{VERSION}}</span>
+  <h1>Understand a codebase on your own machine. Change it <span class="hl">only through you.</span></h1>
+  <p class="lead">NEXUS is a desktop app that maps any local project without AI — its modules, dependency cycles and hotspots — and lets AI agents propose changes in an isolated copy that reach your files only after you approve the diff.</p>
   <div class="row">
-    <a class="btn primary" href="#download">Download the beta</a>
-    <a class="btn" href="{{REPO_URL}}">View source on GitHub</a>
+    <a class="btn primary" href="{{RELEASES_URL}}">Download for macOS, Windows or Linux</a>
+    <a class="btn" href="{{REPO_URL}}">View on GitHub</a>
   </div>
-  <p class="note" style="margin-top:14px">Free and open source (MIT). macOS, Windows and Linux. Beta software: expect rough edges and please report them.</p>
+  <p class="note">No account, no telemetry, no AI key needed. Works with Ollama and other local models.</p>
+  <figure class="hero-shot"><img src="assets/screenshots/architecture-map.png" alt="NEXUS showing the architecture map of a project: modules as circles, imports as arrows, dependency cycles outlined in red" width="2000" height="1272">
+  <figcaption>The architecture map of NEXUS's own repository, built from a local code index. Every image on this page is the real application.</figcaption></figure>
 </div>
 
-<div class="wrap" style="padding-bottom:56px">
-  <figure><img src="assets/screenshots/terminal.png" alt="NEXUS Terminal screen with two real shells side by side, one showing git log and one showing a test run" width="1800" height="1145">
-  <figcaption>The Terminal screen: real shells in split panes. Every screenshot on this page is the actual application.</figcaption></figure>
-</div>
+<section id="demo" aria-labelledby="demo-h"><div class="wrap">
+  <h2 id="demo-h">A quick tour</h2>
+  <p class="sub">Welcome → a project overview → the architecture map → the codebase report → a Git diff → a task waiting for approval → execution settings → agents.</p>
+  <figure><img src="assets/demo/nexus-tour.gif" alt="A looping tour of real NEXUS screenshots" width="1000" height="636" loading="lazy">
+  <figcaption>A sequence of real screenshots, not a screen recording.</figcaption></figure>
+</div></section>
 
-<section id="who"><div class="wrap">
-  <h2>Who it is for</h2>
-  <p class="sub">Developers who work in several repositories and want to see how a codebase fits together, run things, and try local AI models, without sending their source code to a service.</p>
-  <div class="grid">
-    <div class="card"><h3>Joining a codebase</h3><p>See modules, dependencies and cycles on a map; jump to symbols and references; ask where something is handled and get the source lines.</p></div>
-    <div class="card"><h3>Everyday work</h3><p>Search across projects, read diffs, stage files, and keep project shells open in tabs and splits that are still there after a restart.</p></div>
-    <div class="card"><h3>Trying local models</h3><p>Connect Ollama or a llama.cpp server, run prompts, and measure speed on your own hardware before choosing a model.</p></div>
+<section id="features" aria-labelledby="features-h"><div class="wrap">
+  <h2 id="features-h">What it does</h2>
+  <p class="sub">Two halves: understand the code yourself, then let AI change it through you.</p>
+
+  <div class="feature">
+    <div><h3>Understand any codebase — no AI, no key</h3>
+      <p>Point NEXUS at a folder. It analyses languages, frameworks, dependencies and findings, and indexes symbols and imports for Rust, TypeScript, JavaScript, Python and Go. Then: a map of modules and imports with dependency cycles marked, the most-imported files, symbol and reference search, and search across all your projects.</p></div>
+    <figure><img src="assets/screenshots/overview.png" alt="Project overview with repository state, changed files and findings" width="2000" height="1272" loading="lazy"></figure>
+  </div>
+
+  <div class="feature">
+    <div><h3>Share the shape of a project, not its code</h3>
+      <p>One click saves a self-contained HTML report: totals, languages, the module graph and cycles, where to start reading, hotspots, external and declared dependencies, findings and Git facts. It contains file paths and names, and <b>no source code</b>. It runs no scripts and loads nothing.</p>
+      <p><a href="assets/demo/nexus-report.html">Open a real report</a> (NEXUS's own).</p></div>
+    <figure><img src="assets/screenshots/report.png" alt="A codebase report in a browser: totals, languages and the module graph" width="2000" height="2364" loading="lazy"></figure>
+  </div>
+
+  <div class="feature">
+    <div><h3>Agents that ask first</h3>
+      <p>Describe an outcome. A research step and an architect step read the code and propose a plan; <b>you approve it</b>. A developer writes the change in a separate Git worktree, never in your project. Each test command <b>waits for your approval</b>. A review step reads the diff. <b>You approve the final diff</b>, applied all-or-nothing. Credentials in files the agent edits are sent to the model as placeholders.</p></div>
+    <figure><img src="assets/screenshots/agents.png" alt="The Agents screen with the table of what each agent may do" width="2000" height="1272" loading="lazy"></figure>
+  </div>
+
+  <div class="feature">
+    <div><h3>Commands that say how they run</h3>
+      <p>Every command — in a task or from an agent — waits for approval and shows its level: <b>Trusted</b> (as you, not sandboxed), <b>Restricted</b> (macOS sandbox or bubblewrap: writes only to the project, temp and caches; credential folders, NEXUS's data and the keychain hidden) or <b>Isolated</b> (no network). Levels a system cannot enforce are refused, never quietly downgraded. Time limits stop the whole process tree.</p></div>
+    <figure><img src="assets/screenshots/tasks.png" alt="A task step waiting for approval, showing it runs Trusted with a 30 minute time limit" width="2000" height="1272" loading="lazy"></figure>
+  </div>
+
+  <div class="feature">
+    <div><h3>Git and a real terminal, next to it all</h3>
+      <p>Changes, diffs, staging and committing with ⌘Enter; history and branches; merge and conflict state. Your own shell in tabs and splits that survive a restart. NEXUS never pushes, pulls or switches branches for you.</p></div>
+    <figure><img src="assets/screenshots/git.png" alt="Git screen with changed files and a diff" width="2000" height="1272" loading="lazy"></figure>
+  </div>
+
+  <div class="feature">
+    <div><h3>Your models, measured on your hardware</h3>
+      <p>Connect Ollama, llama.cpp, LM Studio or any OpenAI-compatible server, or Anthropic and OpenAI. Model Lab detects and starts local runtimes bound to this computer, streams prompts, and benchmarks models side by side. Keys live in your system's keychain.</p></div>
+    <figure><img src="assets/screenshots/model-lab.png" alt="Model Lab runtimes: Ollama installed, llama.cpp setup instructions" width="2000" height="1272" loading="lazy"></figure>
   </div>
 </div></section>
 
-<section id="features"><div class="wrap">
-  <h2>What it does</h2>
-  <p class="sub">Each area is marked by how far along it is. “Available” means it is built and tested on macOS; see <a href="#platforms">Platforms</a> for Windows and Linux.</p>
-  <div class="grid">
-    <div class="card"><h3>Projects <span class="status ok">Available</span></h3><p>Import local folders. Languages, frameworks and dependencies are detected, with findings such as possible secrets and oversized files.</p></div>
-    <div class="card"><h3><span class="k">Intelligence</span> <span class="status ok">Available</span></h3><p>Code index for Rust, TypeScript, JavaScript, Python and Go. Dependency map, symbol and reference search, source lookup for questions. Works with no AI.</p></div>
-    <div class="card"><h3>Search <span class="status ok">Available</span></h3><p>File-name and content search (text or regex) across every project, respecting <code>.gitignore</code>.</p></div>
-    <div class="card"><h3>Git <span class="status ok">Available</span></h3><p>Branch and upstream state, changed files with diffs, history and branches. Stage and unstage. No committing or pushing from the app yet.</p></div>
-    <div class="card"><h3>Terminal <span class="status ok">Available</span></h3><p>Your own shell in real pseudo-terminals: zsh, bash or fish on macOS and Linux, PowerShell or Command Prompt on Windows. Tabs, splits, saved output, search.</p></div>
-    <div class="card"><h3>Tasks <span class="status ok">Available</span></h3><p>Step lists for a project. Every command waits for your approval, destructive-looking ones are flagged, output streams live.</p></div>
-    <div class="card"><h3><span class="k">Model Lab</span> <span class="status exp">Experimental</span></h3><p>Detects Ollama, llama.cpp and OpenAI-compatible servers; lists their models; a playground with streaming; repeatable benchmarks on your hardware; model downloads you start yourself.</p></div>
-    <div class="card"><h3><span class="k">Agents</span> <span class="status exp">Experimental</span></h3><p>Describe an outcome; agents research, plan, implement, test and review in an isolated Git worktree. The plan, every command and the final diff each need your approval. Needs an AI provider.</p></div>
-    <div class="card"><h3>Planned <span class="status">Not built</span></h3><p>Commit and push from the app, a testing lab, signed installers and automatic updates. These are not in the beta.</p></div>
-  </div>
-</div></section>
-
-<section id="screens"><div class="wrap">
-  <h2>Screens</h2>
-  <p class="sub">Taken from the running app on a small demo project.</p>
-  <div class="shots">
-    <figure><img loading="lazy" src="assets/screenshots/intelligence.png" alt="Intelligence screen showing a dependency map of a project's modules" width="1800" height="1145"><figcaption>Intelligence: module map with dependencies.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/screenshots/git.png" alt="Git screen showing a changed file and its diff" width="1800" height="1145"><figcaption>Git: changed files and diffs.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/screenshots/modellab.png" alt="Model Lab runtimes tab listing detected local model runtimes and setup instructions" width="1800" height="1145"><figcaption>Model Lab: local runtimes found on the machine.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/screenshots/agents.png" alt="Agents overview listing five agent roles and their permissions" width="1800" height="1145"><figcaption>Agents: roles and what each is allowed to do.</figcaption></figure>
-    <figure><img loading="lazy" src="assets/screenshots/welcome.png" alt="First-run welcome screen explaining the local-first approach and what was detected" width="1800" height="1145"><figcaption>First run: what was found, nothing forced.</figcaption></figure>
-  </div>
-</div></section>
-
-<section id="platforms"><div class="wrap">
-  <h2>Supported platforms</h2>
-  <p class="sub">What has actually been checked for this beta. “CI” means automated tests and an automated install-and-launch check on a clean machine, with nobody looking at the window.</p>
+<section id="why" aria-labelledby="why-h"><div class="wrap">
+  <h2 id="why-h">Why NEXUS</h2>
+  <p class="sub">Most AI coding tools start with the agent. NEXUS starts with understanding, and puts every change behind your approval. It is not an editor — use it next to yours.</p>
   <table>
-    <thead><tr><th>System</th><th>Packages</th><th>Status</th></tr></thead>
+    <thead><tr><th scope="col">If you want…</th><th scope="col">Probably use</th></tr></thead>
     <tbody>
-      <tr><td>macOS 12 or later<br><span class="dim">Apple Silicon and Intel</span></td><td><code>.dmg</code></td><td class="dim">The reference platform: developed and used here. The Intel build is compiled and packaged, and launched only under Rosetta, not on an Intel Mac.</td></tr>
-      <tr><td>Windows 10 and 11<br><span class="dim">64-bit</span></td><td><code>-setup.exe</code>, <code>.msi</code></td><td class="dim">New in this beta. Built, tested, installed and launched automatically in CI; not yet used by hand. Please report problems.</td></tr>
-      <tr><td>Linux<br><span class="dim">x86-64, glibc 2.35+</span></td><td><code>.AppImage</code>, <code>.deb</code>, <code>.rpm</code></td><td class="dim">New in this beta. Built, tested, installed and launched automatically in CI on Ubuntu 22.04 only. Other distributions are untested.</td></tr>
+      <tr><td>The most capable agent in your terminal</td><td class="dim">Claude Code</td></tr>
+      <tr><td>An AI-first editor with completions</td><td class="dim">Cursor, Windsurf, VS Code with Copilot, Zed</td></tr>
+      <tr><td>A terminal pair programmer that commits each change</td><td class="dim">Aider</td></tr>
+      <tr><td>To understand a codebase locally, share its shape without the code, and run AI changes as reviewable proposals with local models</td><td><b>NEXUS</b></td></tr>
     </tbody>
   </table>
+  <p class="note" style="margin-top:12px">Where NEXUS is weaker, with sources: <a href="{{REPO_URL}}/blob/main/docs/COMPARISON.md">the full comparison</a>.</p>
 </div></section>
 
-<section id="download"><div class="wrap">
-  <h2>Download</h2>
-  <p class="sub">Installers, checksums (<code>SHA256SUMS.txt</code>) and a manifest are attached to each release on GitHub.</p>
-  <div class="row"><a class="btn primary" href="{{RELEASES_URL}}">Open the releases page</a><a class="btn" href="{{REPO_URL}}/blob/main/docs/INSTALLATION.md">Installation guide</a></div>
-  <p class="note" style="margin-top:14px">The beta installers are <strong>not code-signed or notarized</strong>. Your system will warn you the first time; the steps below explain what to expect. Check the SHA-256 of your download against <code>SHA256SUMS.txt</code>.</p>
+<section id="start" aria-labelledby="start-h"><div class="wrap">
+  <h2 id="start-h">Get started in five minutes</h2>
+  <ol class="steps">
+    <li><b>Download</b> the installer for your system from <a href="{{RELEASES_URL}}">Releases</a> and check it against <code>SHA256SUMS.txt</code>. The beta is unsigned: on macOS right-click → <b>Open</b> the first time; on Windows <b>More info → Run anyway</b>.</li>
+    <li><b>Choose a folder</b> with code in it. NEXUS analyses and indexes it in seconds and never changes your files.</li>
+    <li><b>Open the map</b> (Intelligence) or <b>share a report</b> (Overview).</li>
+    <li><b>Optional:</b> connect a model. If Ollama is installed, the first-run guide can start and connect it.</li>
+  </ol>
+  <table class="platforms">
+    <thead><tr><th scope="col">System</th><th scope="col">Download</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      <tr><td>macOS, Apple Silicon</td><td class="dim"><code>.dmg</code> (aarch64)</td><td class="dim">Used daily</td></tr>
+      <tr><td>macOS, Intel</td><td class="dim"><code>.dmg</code> (x64)</td><td class="dim">Built and launch-checked under Rosetta</td></tr>
+      <tr><td>Windows 10/11 x64</td><td class="dim"><code>-setup.exe</code> or <code>.msi</code></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
+      <tr><td>Linux x64</td><td class="dim"><code>.deb</code>, <code>.rpm</code>, <code>.AppImage</code></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top:12px">Step-by-step: <a href="{{REPO_URL}}/blob/main/docs/GETTING_STARTED.md">getting started</a> · <a href="{{REPO_URL}}/blob/main/docs/INSTALLATION.md">installation</a> · <a href="{{REPO_URL}}/blob/main/docs/TROUBLESHOOTING.md">troubleshooting</a></p>
 </div></section>
 
-<section id="install"><div class="wrap">
-  <h2>Install</h2>
-  <details open><summary>macOS</summary>
-    <p>Open the <code>.dmg</code> and drag NEXUS to Applications. Because the beta is unsigned, the first launch is blocked: right-click NEXUS, choose <em>Open</em>, then <em>Open</em> again (or allow it under System Settings → Privacy &amp; Security).</p></details>
-  <details><summary>Windows</summary>
-    <p>Run <code>NEXUS_{{VERSION}}_x64-setup.exe</code>. SmartScreen will show “Windows protected your PC” because the installer is unsigned: choose <em>More info</em> → <em>Run anyway</em>. It installs for your user only and needs no administrator rights. Git for Windows is needed for Git features.</p></details>
-  <details><summary>Linux</summary>
-    <p>Debian or Ubuntu: <code>sudo apt install ./NEXUS_{{VERSION}}_amd64.deb</code>. Fedora or RHEL: <code>sudo dnf install ./NEXUS-{{VERSION}}-1.x86_64.rpm</code>. Anything else: make the <code>.AppImage</code> executable and run it. NEXUS needs WebKitGTK 4.1 and, to store API keys, a Secret Service such as GNOME Keyring or KWallet.</p></details>
-  <p class="note">Updating: install the new version over the old one. Your projects list, settings and history are kept; NEXUS never modifies your project folders during an update.</p>
-</div></section>
-
-<section id="privacy"><div class="wrap">
-  <h2>Privacy</h2>
+<section id="open-source" aria-labelledby="os-h"><div class="wrap">
+  <h2 id="os-h">Open source</h2>
+  <p class="sub">MIT-licensed and built in the open by a student developer. Help is especially welcome with:</p>
   <ul class="plain">
-    <li>No account, no analytics, no telemetry, no crash uploads.</li>
-    <li>Your code, the code index, terminal output and settings stay in a folder on your computer.</li>
-    <li>API keys go into the macOS Keychain, Windows Credential Manager or the Linux Secret Service, never into a file.</li>
-    <li>Network requests happen only when you ask for them: sending a prompt to a provider you configured, searching for or downloading a model, or opening a link.</li>
-    <li>The diagnostic report in “About &amp; feedback” is shown to you first and is never sent by the app.</li>
+    <li>trying NEXUS on Windows and Linux and reporting what breaks;</li>
+    <li>teaching the code index another language (Java, C#, Kotlin, Swift, C/C++);</li>
+    <li>documentation where the docs and the app disagree.</li>
   </ul>
-  <p style="margin-top:14px"><a href="{{REPO_URL}}/blob/main/docs/PRIVACY.md">Read the full privacy notes</a></p>
+  <p style="margin-top:16px"><a class="btn" href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">How to contribute</a></p>
 </div></section>
 
-<section id="feedback"><div class="wrap">
-  <h2>Feedback</h2>
-  <p class="sub">This beta exists to find out what breaks on machines that are not ours. Reports are public GitHub issues and need a GitHub account.</p>
-  <div class="row">
-    <a class="btn" href="{{REPO_URL}}/issues/new?template=bug_report.yml">Report a bug</a>
-    <a class="btn" href="{{REPO_URL}}/issues/new?template=feature_request.yml">Request a feature</a>
-    <a class="btn" href="{{REPO_URL}}/issues/new?template=installation_problem.yml">Installation problem</a>
-    <a class="btn" href="{{REPO_URL}}/issues/new/choose">Windows, Linux or performance</a>
+<section id="roadmap" aria-labelledby="rm-h"><div class="wrap">
+  <h2 id="rm-h">Roadmap</h2>
+  <div class="grid">
+    <div class="card"><h3>Now</h3><p>Release 0.2.0: the codebase report, guided first run, sandboxed execution levels and the new interface, verified on every system.</p></div>
+    <div class="card"><h3>Next</h3><p>A Windows sandbox backend, signed installers, incremental indexing, better agents with local models, comparing two reports.</p></div>
+    <div class="card"><h3>Not planned</h3><p>An editor, accounts, telemetry, or a bundled hosted model.</p></div>
   </div>
-  <p class="note" style="margin-top:14px">In the app, “About &amp; feedback” shows your version and a diagnostic report you can copy into the form.</p>
+  <p class="note" style="margin-top:12px"><a href="{{REPO_URL}}/blob/main/docs/ROADMAP.md">Full roadmap</a></p>
 </div></section>
 
-<section id="docs"><div class="wrap">
-  <h2>Documentation</h2>
-  <ul class="plain">
-    <li><a href="{{REPO_URL}}/blob/main/docs/INSTALLATION.md">Installation, updating and uninstalling</a></li>
-    <li><a href="{{REPO_URL}}/blob/main/docs/WINDOWS.md">Windows notes</a> · <a href="{{REPO_URL}}/blob/main/docs/LINUX.md">Linux notes</a> · <a href="{{REPO_URL}}/blob/main/docs/MACOS.md">macOS notes</a></li>
-    <li><a href="{{REPO_URL}}/blob/main/docs/ARCHITECTURE.md">Architecture</a> · <a href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">Contributing</a> · <a href="{{REPO_URL}}/blob/main/CHANGELOG.md">Changelog</a></li>
-  </ul>
+<section id="faq" aria-labelledby="faq-h"><div class="wrap">
+  <h2 id="faq-h">FAQ</h2>
+  <details><summary>Do I need an AI key or a model?</summary><p>No. The map, symbols, search, the codebase report, Git, the terminal and tasks work without one. Questions about the code and agents need a model; a local one (Ollama, llama.cpp, LM Studio) needs no key.</p></details>
+  <details><summary>Does my code leave my computer?</summary><p>Only when you send something to a model that is not on your computer, and NEXUS asks you to confirm that for each request. There is no account, telemetry, analytics or update check. <a href="{{REPO_URL}}/blob/main/docs/PRIVACY.md">Privacy details</a>.</p></details>
+  <details><summary>Can an agent damage my project?</summary><p>The agent writes only in a separate Git worktree. Your project changes only when you approve the final diff, applied all-or-nothing. Test commands each need approval and can run sandboxed on macOS and Linux.</p></details>
+  <details><summary>Is it an editor? Does it replace Cursor or Claude Code?</summary><p>No. Use NEXUS next to your editor to understand a project, review changes and run controlled AI work.</p></details>
+  <details><summary>Which languages does the code index understand?</summary><p>Rust, TypeScript, JavaScript, Python and Go. Other languages still appear in analysis and search.</p></details>
+  <details><summary>Why are the installers unsigned?</summary><p>Signing needs paid certificates; it is on the roadmap. Each release includes SHA-256 checksums.</p></details>
+  <details><summary>What are the system requirements?</summary><p>macOS 12+, Windows 10 (1809+) or 11 x64 with WebView2, or Linux x64 with glibc 2.35+ and WebKitGTK 4.1. About 200 MB of disk. Git for Git features and agents.</p></details>
 </div></section>
 </main>
 
-<footer><div class="wrap">NEXUS {{VERSION}} public beta · MIT licence · <a href="{{REPO_URL}}">Source</a></div></footer>
+<footer><div class="wrap row" style="justify-content:space-between">
+  <span>NEXUS {{VERSION}} · MIT licence</span>
+  <span class="row" style="gap:16px">
+    <a href="{{REPO_URL}}">GitHub</a><a href="{{RELEASES_URL}}">Releases</a><a href="{{REPO_URL}}/blob/main/docs/README.md">Documentation</a><a href="{{REPO_URL}}/issues/new/choose">Report a problem</a><a href="{{REPO_URL}}/blob/main/SECURITY.md">Security</a>
+  </span>
+</div></footer>
 </body>
 </html>

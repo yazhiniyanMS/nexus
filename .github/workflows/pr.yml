@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
-            libdbus-1-dev libssl-dev pkg-config build-essential
+            libdbus-1-dev libssl-dev pkg-config build-essential bubblewrap
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -44,6 +44,8 @@ jobs:
         run: node scripts/check-version.mjs
       - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - name: Rust lints (warnings are errors)
+        run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
       - name: Frontend type-check
         run: npm run typecheck
       - name: Frontend tests
@@ -52,5 +54,57 @@ jobs:
         run: npm run build
       - name: Rust tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+        env:
+          # Linux installs bubblewrap above, so the isolation tests must run there, not skip.
+          NEXUS_REQUIRE_SANDBOX: ${{ runner.os == 'Linux' && '1' || '' }}
       - name: Compile the application
         run: npm run tauri build -- --no-bundle
+
+  dependencies:
+    name: Dependency security
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      # Fails on any known vulnerability in Cargo.lock. Unmaintained and unsound notices are
+      # printed but do not fail the job; they are reviewed in docs/audit/SECURITY_AUDIT.md.
+      - name: Rust advisories (RustSec)
+        run: cargo audit --file src-tauri/Cargo.lock
+      - name: npm advisories
+        run: npm audit --audit-level=high
+      - name: Lockfiles match the manifests
+        run: |
+          npm ci --ignore-scripts
+          cargo metadata --locked --format-version 1 --manifest-path src-tauri/Cargo.toml > /dev/null
+
+  # The macOS sandbox backend and the Unix process tests, on the reference platform. Only the
+  # execution modules, to keep macOS runner minutes low.
+  macos-execution:
+    name: Execution isolation (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install Rust (version from rust-toolchain.toml)
+        shell: bash
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Build frontend (embedded by the Rust build)
+        run: npm run build
+      - name: Execution, environment and secret tests
+        env:
+          NEXUS_REQUIRE_SANDBOX: "1"
+        run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib -- exec:: jobs:: secrets:: agents:: tasks::"

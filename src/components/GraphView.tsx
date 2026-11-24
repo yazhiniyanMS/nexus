@@ -49,6 +49,23 @@ function layout(graph: Graph): Map<string, Point> {
       p.y = Math.min(H - 40, Math.max(40, p.y + (d.y / len) * Math.min(len, temp)));
     }
   }
+  return fit(pos);
+}
+
+/** Scale and centre a finished layout inside margins wide enough for node labels, so nothing
+ * sits against (or past) the edge and disconnected groups do not drift into the corners. */
+function fit(pos: Map<string, Point>): Map<string, Point> {
+  const pts = [...pos.values()];
+  if (pts.length < 2) return pos;
+  const [mx, my] = [130, 70];
+  const minX = Math.min(...pts.map((p) => p.x)), maxX = Math.max(...pts.map((p) => p.x));
+  const minY = Math.min(...pts.map((p) => p.y)), maxY = Math.max(...pts.map((p) => p.y));
+  const s = Math.min((W - 2 * mx) / Math.max(1, maxX - minX), (H - 2 * my) / Math.max(1, maxY - minY), 1.5);
+  const ox = (W - (maxX - minX) * s) / 2, oy = (H - (maxY - minY) * s) / 2;
+  for (const p of pts) {
+    p.x = ox + (p.x - minX) * s;
+    p.y = oy + (p.y - minY) * s;
+  }
   return pos;
 }
 

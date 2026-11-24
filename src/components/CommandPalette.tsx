@@ -49,7 +49,8 @@ export function CommandPalette({ ws, views, actions, onClose }: {
       group: "Symbols",
       run: () => ws.peek({ projectId: s.project_id, path: s.path, line: s.line }),
     }));
-    return [...found, ...fixed];
+    // Screens and actions first: they are few, and the highlighted one must not move when symbols arrive.
+    return [...fixed, ...found];
   }, [query, symbols, views, actions, ws]);
 
   useEffect(() => setIndex(0), [query, symbols.length]);
@@ -63,7 +64,7 @@ export function CommandPalette({ ws, views, actions, onClose }: {
 
   return (
     <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/55 pt-[14vh]" onMouseDown={onClose} data-testid="palette">
-      <div className="w-[560px] overflow-hidden rounded-xl border border-line bg-panel shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="w-[560px] overflow-hidden rounded-lg border border-line-strong bg-panel shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2.5 border-b border-line px-3.5">
           <Search size={15} className="text-faint" />
           <input
@@ -80,19 +81,24 @@ export function CommandPalette({ ws, views, actions, onClose }: {
             }}
           />
         </div>
-        <div ref={list} className="max-h-[46vh] overflow-auto p-1.5">
-          {commands.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-faint">Nothing matches “{query}”.</div>}
+        <div ref={list} role="listbox" aria-label="Commands" className="max-h-[46vh] overflow-auto p-1.5">
+          {commands.length === 0 && <div className="px-3 py-6 text-center text-sm text-faint">Nothing matches “{query}”.</div>}
           {commands.map((c, i) => (
             <div key={c.id}>
-              {(i === 0 || commands[i - 1].group !== c.group) && <div className="px-2.5 pt-2 pb-1 text-[11px] font-medium text-faint">{c.group}</div>}
+              {(i === 0 || commands[i - 1].group !== c.group) && <div className="px-2.5 pt-2 pb-1 text-2xs font-medium text-faint">{c.group}</div>}
               <button
+                role="option"
+                aria-selected={i === index}
                 data-active={i === index}
-                onMouseEnter={() => setIndex(i)}
+                tabIndex={-1}
+                // Only a real pointer movement changes the highlight: rows re-rendering under a
+                // resting pointer must not take the keyboard selection away.
+                onMouseMove={() => i !== index && setIndex(i)}
                 onClick={() => run(c)}
-                className={clsx("flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-left text-[13px]", i === index ? "bg-raised text-ink" : "text-dim")}
+                className={clsx("flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-left text-sm", i === index ? "bg-raised text-ink" : "text-dim")}
               >
                 <span className={clsx("shrink-0", c.group === "Symbols" && "font-mono")}>{c.label}</span>
-                {c.hint && <span className="ml-auto truncate font-mono text-[11px] text-faint">{c.hint}</span>}
+                {c.hint && <span className="ml-auto truncate font-mono text-2xs text-faint">{c.hint}</span>}
               </button>
             </div>
           ))}

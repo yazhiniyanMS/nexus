@@ -37,11 +37,11 @@ export function modelsOf(ctx: LabCtx, providerId: string): string[] {
 
 export function LocalBadge({ provider }: { provider: Provider }) {
   return provider.local ? (
-    <span className="inline-flex items-center gap-1 text-[11px] text-accent" title="Requests to this connection stay on this machine">
+    <span className="inline-flex items-center gap-1 text-2xs text-accent" title="Requests to this connection stay on this machine">
       <HardDrive size={11} /> on this machine
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[11px] text-warn" title={`Requests to this connection go to ${hostOf(provider.base_url)}`}>
+    <span className="inline-flex items-center gap-1 text-2xs text-warn" title={`Requests to this connection go to ${hostOf(provider.base_url)}`}>
       <Globe size={11} /> remote · {hostOf(provider.base_url)}
     </span>
   );
@@ -140,7 +140,7 @@ export function ParamsEditor({ kind, value, onChange, onError, disabled }: {
       <div className="grid grid-cols-2 gap-2">
         {specs.map((s) => (
           <label key={s.key} className="block" title={s.hint}>
-            <div className="mb-1 text-[11px] font-medium text-dim">{s.label}</div>
+            <div className="mb-1 text-2xs font-medium text-dim">{s.label}</div>
             <Input
               aria-label={s.label}
               inputMode="decimal"
@@ -154,7 +154,7 @@ export function ParamsEditor({ kind, value, onChange, onError, disabled }: {
         ))}
         {supported.includes("think") && (
           <label className="block" title="Thinking-capable models can answer without thinking first">
-            <div className="mb-1 text-[11px] font-medium text-dim">Thinking</div>
+            <div className="mb-1 text-2xs font-medium text-dim">Thinking</div>
             <Select
               aria-label="Thinking"
               value={value.think === null ? "" : value.think ? "on" : "off"}
@@ -169,7 +169,7 @@ export function ParamsEditor({ kind, value, onChange, onError, disabled }: {
         )}
       </div>
       {Object.values(errors)[0] && <div className="text-xs text-danger">{Object.values(errors)[0]}</div>}
-      {kind.kind === "anthropic" && <div className="text-[11px] leading-relaxed text-faint">Current Claude models reject temperature, top-p and top-k, so NEXUS does not send them.</div>}
+      {kind.kind === "anthropic" && <div className="text-2xs leading-relaxed text-faint">Current Claude models reject temperature, top-p and top-k, so NEXUS does not send them.</div>}
     </div>
   );
 }
@@ -186,7 +186,7 @@ function Metric({ label, value, title }: { label: string; value: string; title?:
 export function MetricsLine({ metrics, className }: { metrics: Metrics; className?: string }) {
   const derived = metrics.tps_source === "derived";
   return (
-    <div data-testid="metrics" className={clsx("flex flex-wrap gap-x-4 gap-y-1 text-[11px]", className)}>
+    <div data-testid="metrics" className={clsx("flex flex-wrap gap-x-4 gap-y-1 text-2xs", className)}>
       <Metric label="first token" value={fmtMs(metrics.ttft_ms)} title="Measured by NEXUS: request sent to first generated text" />
       <Metric label="total" value={fmtMs(metrics.total_ms)} title="Measured by NEXUS: request sent to end of the response" />
       <Metric label="in" value={fmtInt(metrics.input_tokens)} title="Input tokens, as reported by the runtime" />
@@ -233,46 +233,14 @@ export function CopyButton({ text, label = "Copy", size = "sm" }: { text: string
   );
 }
 
-/** A destructive action that needs a second click on a clearly worded confirmation. */
-export function ConfirmButton({ label, confirm, onConfirm, busy, disabled, title, icon }: {
-  label: string; confirm: string; onConfirm: () => void | Promise<void>; busy?: boolean; disabled?: boolean; title?: string; icon?: ReactNode;
-}) {
-  const [asking, setAsking] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  if (!asking) {
-    return (
-      <Button
-        size="sm"
-        variant="ghost"
-        type="button"
-        title={title}
-        disabled={disabled}
-        busy={busy}
-        onClick={() => {
-          setAsking(true);
-          clearTimeout(timer.current);
-          timer.current = setTimeout(() => setAsking(false), 6000);
-        }}
-      >
-        {icon} {label}
-      </Button>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1">
-      <Button size="sm" variant="danger" type="button" busy={busy} onClick={() => { setAsking(false); void onConfirm(); }}>{confirm}</Button>
-      <Button size="sm" variant="ghost" type="button" onClick={() => setAsking(false)}>Keep</Button>
-    </span>
-  );
-}
+export { ConfirmButton } from "../../components/ui";
 
 export function Section({ title, hint, actions, children }: { title: string; hint?: ReactNode; actions?: ReactNode; children: ReactNode }) {
   return (
     <section className="space-y-2">
       <div className="flex items-end gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-[13px] font-semibold">{title}</h2>
+          <h2 className="text-sm font-semibold">{title}</h2>
           {hint && <div className="text-xs leading-relaxed text-dim">{hint}</div>}
         </div>
         {actions}

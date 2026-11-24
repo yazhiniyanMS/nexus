@@ -65,7 +65,7 @@ export function StoragePanel({ ctx }: { ctx: LabCtx }) {
             <Button size="sm" busy={busy} onClick={() => void apply(api.labStorageChoose)} title="Opens a folder picker"><FolderOpen size={12} /> Change folder…</Button>
             {!info.is_default && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void apply(api.labStorageReset)}>Use the default folder</Button>}
           </div>
-          <div className="mt-2 text-[11px] leading-relaxed text-faint">Changing the folder does not move or delete files already downloaded.</div>
+          <div className="mt-2 text-2xs leading-relaxed text-faint">Changing the folder does not move or delete files already downloaded.</div>
         </div>
       </Section>
 
@@ -75,7 +75,7 @@ export function StoragePanel({ ctx }: { ctx: LabCtx }) {
           <div key={f.name} data-file={f.name} className="flex items-center gap-2 rounded-md border border-line p-2">
             <div className="min-w-0 flex-1">
               <div className="selectable truncate font-mono text-xs">{f.name}</div>
-              <div className="text-[11px] text-faint">
+              <div className="text-2xs text-faint">
                 {fmtBytes(f.size_bytes)} ({fmtInt(f.size_bytes)} bytes){f.modified_at ? ` · ${timeAgo(f.modified_at)}` : ""}
               </div>
             </div>
@@ -86,7 +86,7 @@ export function StoragePanel({ ctx }: { ctx: LabCtx }) {
           </div>
         ))}
         {info.files.some((f) => !f.managed && !f.partial) && (
-          <div className="text-[11px] leading-relaxed text-faint">Files marked “your file” were not downloaded by NEXUS, so NEXUS will not delete them. Remove them with your file manager.</div>
+          <div className="text-2xs leading-relaxed text-faint">Files marked “your file” were not downloaded by NEXUS, so NEXUS will not delete them. Remove them with your file manager.</div>
         )}
       </Section>
 

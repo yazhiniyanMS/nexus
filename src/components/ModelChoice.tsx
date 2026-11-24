@@ -103,7 +103,7 @@ export function ModelChoiceControls({ choice, providers, noneLabel, idPrefix, di
 export function ModelChoiceNotice({ choice, what }: { choice: ModelChoiceState; what: string }) {
   const p = choice.provider;
   if (!p) return null;
-  if (p.local) return <div data-testid="model-local" className="text-[11px] text-faint">Answered by <span className="font-mono">{choice.model || "a model"}</span> on this machine ({p.name}). Nothing leaves it.</div>;
+  if (p.local) return <div data-testid="model-local" className="text-2xs text-faint">Answered by <span className="font-mono">{choice.model || "a model"}</span> on this machine ({p.name}). Nothing leaves it.</div>;
   return (
     <label data-testid="remote-notice" className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
       <input type="checkbox" className="mt-0.5 accent-warn" checked={choice.allowRemote} onChange={(e) => choice.setAllowRemote(e.target.checked)} />

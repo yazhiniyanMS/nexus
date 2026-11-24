@@ -178,6 +178,7 @@ pub fn parse_reply<T: DeserializeOwned>(reply: &str) -> Result<T> {
 const JSON_ONLY: &str = "Reply with ONLY one JSON object and nothing else.";
 
 pub fn research_prompt(outcome: &str, sources: &str) -> (String, String) {
+    let sources = &crate::projects::mask_secrets(sources);
     (
         format!(
             "You are the Research agent in a software engineering team. You only read; you never change anything. \
@@ -190,6 +191,7 @@ pub fn research_prompt(outcome: &str, sources: &str) -> (String, String) {
 }
 
 pub fn architect_prompt(outcome: &str, project: &str, structure: &str, research: &str, sources: &str) -> (String, String) {
+    let sources = &crate::projects::mask_secrets(sources);
     let os = std::env::consts::OS;
     let shell = crate::platform::process::shell_invocation().0;
     (
@@ -218,6 +220,7 @@ pub fn developer_prompt(outcome: &str, plan: &Plan, files: &str) -> (String, Str
 }
 
 pub fn review_prompt(outcome: &str, plan: &Plan, diff: &str, tests: &str) -> (String, String) {
+    let (diff, tests) = (&crate::projects::mask_secrets(diff), &crate::projects::mask_secrets(tests));
     let steps: String = plan.steps.iter().map(|s| format!("- {}\n", s.title)).collect();
     (
         format!(

@@ -56,3 +56,18 @@ summary { cursor: pointer; font-weight: 600; }
 details p, details li { color: var(--dim); font-size: 14px; }
 footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--faint); font-size: 13px; }
 @media (max-width: 820px) { .grid, .shots { grid-template-columns: 1fr; } nav.links { display: none; } .hero { padding-top: 44px; } }
+/* 0.2 page */
+.skip { position: absolute; left: -999px; top: 8px; background: var(--mint); color: #000; padding: 8px 12px; border-radius: 6px; z-index: 10; }
+.skip:focus { left: 12px; }
+.hl { color: var(--mint); }
+.hero-shot { margin-top: 40px; }
+.feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 36px; align-items: center; padding: 28px 0; border-top: 1px solid var(--line); }
+.feature:first-of-type { border-top: 0; }
+.feature h3 { font-size: 19px; margin-bottom: 10px; }
+.feature p { color: var(--dim); margin: 0 0 10px; font-size: 15px; }
+.feature p b { color: var(--ink); font-weight: 600; }
+.feature figure img { max-height: 420px; object-fit: cover; object-position: top; }
+ol.steps { color: var(--dim); padding-left: 20px; margin: 0 0 24px; max-width: 46em; }
+ol.steps li { margin: 8px 0; }
+ol.steps b { color: var(--ink); }
+@media (max-width: 820px) { .feature { grid-template-columns: 1fr; gap: 16px; } }

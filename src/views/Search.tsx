@@ -3,7 +3,7 @@ import { File as FileIcon, Search as SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Workspace } from "../App";
 import { FilePreview } from "../components/FilePreview";
-import { Button, Empty, ErrorBanner, Input, PageHeader, Select } from "../components/ui";
+import { Button, Empty, ErrorBanner, Input, Select, ViewHeader } from "../components/ui";
 import { api, type SearchMatch, type SearchResult } from "../lib/api";
 import { errorText } from "../lib/util";
 
@@ -55,7 +55,7 @@ export default function SearchView({ ws }: { ws: Workspace }) {
 
   return (
     <>
-      <PageHeader title="Search" subtitle="Find files and text across every imported project" />
+      <ViewHeader title="Search" context={<span>file names and contents, in every imported project</span>} />
       <form
         className="flex shrink-0 items-center gap-2 border-b border-line p-3"
         onSubmit={(e) => {
@@ -63,7 +63,7 @@ export default function SearchView({ ws }: { ws: Workspace }) {
           void run();
         }}
       >
-        <Input autoFocus placeholder="Search file names and contents…" value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 font-mono" />
+        <Input autoFocus placeholder="Search file names and contents…" value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 font-mono" aria-label="Search text" />
         <Toggle on={caseSensitive} onClick={() => setCaseSensitive(!caseSensitive)} title="Match case">Aa</Toggle>
         <Toggle on={regex} onClick={() => setRegex(!regex)} title="Regular expression">.*</Toggle>
         <Select className="w-48!" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">

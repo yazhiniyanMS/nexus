@@ -6,6 +6,7 @@ pub mod context;
 pub mod docs;
 pub mod extract;
 pub mod graph;
+pub mod report;
 pub mod resolve;
 
 use crate::error::{AppError, Result};
@@ -200,7 +201,7 @@ pub fn references_in(root: &Path, paths: &[String], definitions: &HashSet<(Strin
             }
         }
     }
-    out.sort_by(|a, b| b.is_definition.cmp(&a.is_definition));
+    out.sort_by_key(|r| std::cmp::Reverse(r.is_definition));
     Ok(out)
 }
 
@@ -265,7 +266,10 @@ fn load_for_retrieval(root: &Path, paths: Vec<String>, symbols: Vec<(String, Str
         .collect()
 }
 
-fn retrieval_inputs(conn: &Connection, project_id: &str) -> Result<(Vec<String>, Vec<(String, String, u32)>)> {
+/// Indexed paths, and every symbol as (path, name, line).
+type RetrievalInputs = (Vec<String>, Vec<(String, String, u32)>);
+
+fn retrieval_inputs(conn: &Connection, project_id: &str) -> Result<RetrievalInputs> {
     let paths = indexed_paths(conn, project_id)?.into_iter().map(|(p, _)| p).collect();
     let mut stmt = conn.prepare("SELECT path, name, line FROM intel_symbols WHERE project_id = ?1")?;
     let symbols = stmt.query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
@@ -340,7 +344,160 @@ pub fn architecture_markdown(conn: &Connection, project_id: &str) -> Result<Stri
     }))
 }
 
+/// Counts and dates from Git for the report. No names or e-mail addresses leave this function.
+fn git_facts(root: &Path) -> Option<report::GitFacts> {
+    let g = |args: &[&str]| crate::git::git(root, args).ok().map(|s| s.trim().to_string());
+    if g(&["rev-parse", "--is-inside-work-tree"]).as_deref() != Some("true") {
+        return None;
+    }
+    let mut facts = report::GitFacts {
+        branch: g(&["symbolic-ref", "--quiet", "--short", "HEAD"]).filter(|b| !b.is_empty()),
+        uncommitted: g(&["status", "--porcelain"]).map(|s| s.lines().count() as u64).unwrap_or(0),
+        ..Default::default()
+    };
+    if let Some(n) = g(&["rev-list", "--count", "HEAD"]).and_then(|n| n.parse().ok()) {
+        facts.commits = n;
+        facts.contributors = g(&["log", "--format=%ae"]).map(|s| s.lines().collect::<HashSet<_>>().len() as u64).unwrap_or(0);
+        facts.last_commit = g(&["log", "-1", "--format=%as"]);
+        facts.first_commit = g(&["log", "--reverse", "--format=%as"]).and_then(|s| s.lines().next().map(String::from));
+    }
+    Some(facts)
+}
+
+/// The shareable codebase report for a project, as one HTML document. See [`report`].
+pub fn report_html(conn: &Connection, project_id: &str, root: &Path) -> Result<String> {
+    let (name, analysis): (String, Option<String>) =
+        conn.query_row("SELECT name, analysis FROM projects WHERE id = ?1", [project_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    let analysis: serde_json::Value = analysis.and_then(|a| serde_json::from_str(&a).ok()).unwrap_or_default();
+    let st = status(conn, project_id)?;
+    if st.files == 0 {
+        return Err("Build the code index first (Intelligence → Rebuild index); the report is made from it.".into());
+    }
+    // The folder depth that shows the most dependencies between modules while staying readable:
+    // a project whose code sits in one deep folder (src-tauri/src/…) needs more levels.
+    let mut modules = graph_for(conn, project_id, "module", 1, false)?;
+    for depth in 2..=3 {
+        let deeper = graph_for(conn, project_id, "module", depth, false)?;
+        let readable = deeper.nodes.iter().filter(|n| n.kind == "module").count() <= 36;
+        if readable && deeper.edges.len() > modules.edges.len() {
+            modules = deeper;
+        }
+    }
+    let pairs = |sql: &str| -> Result<Vec<(String, u32)>> {
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map([project_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    };
+    let mut l =
+        conn.prepare("SELECT language, COUNT(*), SUM(lines) FROM intel_files WHERE project_id = ?1 GROUP BY language ORDER BY 3 DESC")?;
+    let languages: Vec<(String, u64, u64)> = l
+        .query_map([project_id], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)))?
+        .collect::<rusqlite::Result<_>>()?;
+    let lines = languages.iter().map(|l| l.2).sum();
+    let entry_points = indexed_paths(conn, project_id)?
+        .into_iter()
+        .map(|(p, _)| p)
+        .filter(|p| p.matches('/').count() <= 3 && ENTRY_NAMES.contains(&p.rsplit('/').next().unwrap_or("")))
+        .take(12)
+        .collect();
+    let strs = |v: &serde_json::Value, key: &str| v.get(key).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let manifests = analysis
+        .get("dependencies")
+        .and_then(|d| d.as_array())
+        .map(|groups| {
+            groups
+                .iter()
+                .map(|g| {
+                    let deps = g
+                        .get("deps")
+                        .and_then(|d| d.as_array())
+                        .map(|d| d.iter().map(|x| (strs(x, "name"), strs(x, "version"))).collect())
+                        .unwrap_or_default();
+                    (strs(g, "manifest"), strs(g, "ecosystem"), deps)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let findings = analysis
+        .get("issues")
+        .and_then(|d| d.as_array())
+        .map(|issues| {
+            issues
+                .iter()
+                .map(|i| {
+                    let file = i.get("file").and_then(|f| f.as_str()).map(String::from);
+                    let line = i.get("line").and_then(|f| f.as_u64()).map(|n| n as u32);
+                    (strs(i, "severity"), strs(i, "kind"), strs(i, "message"), file, line)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let now = db::now();
+    Ok(report::render(&report::ReportInput {
+        name: &name,
+        generated_at: &now[..10],
+        version: env!("CARGO_PKG_VERSION"),
+        summary: analysis.get("summary").and_then(|s| s.as_str()).unwrap_or(""),
+        frameworks: analysis
+            .get("frameworks")
+            .and_then(|f| f.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default(),
+        languages,
+        files: st.files as u64,
+        lines,
+        symbols: st.symbols as u64,
+        modules: &modules,
+        hotspots: pairs(
+            "SELECT target, COUNT(DISTINCT from_path) FROM intel_imports WHERE project_id = ?1 AND external = 0
+             GROUP BY target ORDER BY 2 DESC, 1 LIMIT 10",
+        )?,
+        entry_points,
+        externals: pairs(
+            "SELECT target, COUNT(DISTINCT from_path) FROM intel_imports WHERE project_id = ?1 AND external = 1
+             GROUP BY target ORDER BY 2 DESC, 1 LIMIT 25",
+        )?,
+        manifests,
+        findings,
+        git: git_facts(root),
+    }))
+}
+
 // ---------------------------------------------------------------- commands
+
+/// Save the codebase report where the user picks in a native dialog, and optionally open it in
+/// the default browser. The HTML is made and written here; the webview never handles it and
+/// never names the path.
+#[tauri::command]
+pub async fn save_project_report<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    project_id: String,
+    open: bool,
+) -> Result<Option<String>> {
+    let root = project_root(&state, &project_id)?;
+    let (html, name) = {
+        let conn = state.db.conn();
+        let name: String = conn.query_row("SELECT name FROM projects WHERE id = ?1", [&project_id], |r| r.get(0))?;
+        (report_html(&conn, &project_id, &root)?, name)
+    };
+    let suggested: String = format!("{name}-report.html").chars().filter(|c| !matches!(c, '/' | '\\' | ':')).take(120).collect();
+    let dialog = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog.dialog().file().set_file_name(suggested).add_filter("HTML report", &["html"]).blocking_save_file()
+    })
+    .await
+    .map_err(|e| AppError::Msg(format!("Could not open the save dialog: {e}")))?;
+    let Some(file) = picked else { return Ok(None) };
+    let path = file.into_path().map_err(|e| AppError::Msg(format!("Unsupported save location: {e}")))?;
+    std::fs::write(&path, html)?;
+    activity::log(&state.db.conn(), "index", "Saved a codebase report", Some(&project_id));
+    if open {
+        use tauri_plugin_opener::OpenerExt;
+        let _ = app.opener().open_path(path.to_string_lossy(), None::<&str>);
+    }
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
 
 #[derive(Serialize, Clone)]
 struct Progress<'a> {
@@ -497,7 +654,10 @@ pub async fn ask_codebase(
     if sources.is_empty() {
         return Err("No source files matched this question, so there is nothing to ground an answer in. Try naming a file, function or concept from the code.".into());
     }
-    let (system, user) = context::build_prompt(&question, &sources);
+    // The answer cites the real excerpts; the model gets them with credentials masked.
+    let masked: Vec<context::Source> =
+        sources.iter().map(|s| context::Source { text: crate::projects::mask_secrets(&s.text), ..s.clone() }).collect();
+    let (system, user) = context::build_prompt(&question, &masked);
     let reply =
         ai::complete(&state, &provider_id, model, Some(system), vec![ai::ChatMessage { role: "user".into(), content: user }]).await?;
     activity::log(&state.db.conn(), "ai", "Answered a codebase question with cited sources", Some(&project_id));
@@ -554,6 +714,68 @@ pub async fn export_text<R: Runtime>(app: AppHandle<R>, suggested_name: String, 
 mod tests {
     use super::*;
     use crate::projects::tests::temp_project;
+
+    /// Writes a real report for a folder, through the same analysis, index and renderer the app
+    /// uses. For producing the sample in docs/assets/demo:
+    /// `NEXUS_REPORT_FOR=/path NEXUS_REPORT_OUT=out.html cargo test --lib write_report_for_a_folder -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_report_for_a_folder() {
+        let root = std::path::PathBuf::from(std::env::var("NEXUS_REPORT_FOR").expect("NEXUS_REPORT_FOR"));
+        let out = std::env::var("NEXUS_REPORT_OUT").expect("NEXUS_REPORT_OUT");
+        let name = root.file_name().unwrap().to_string_lossy().into_owned();
+        let analysis = crate::projects::analyze(&root);
+        let data = build_index(&root, |_, _| {});
+        let db = db::Db::in_memory().unwrap();
+        let mut conn = db.conn();
+        conn.execute(
+            "INSERT INTO projects (id, name, path, added_at, analysis) VALUES ('p', ?1, ?2, '', ?3)",
+            params![name, root.to_string_lossy(), serde_json::to_string(&analysis).unwrap()],
+        )
+        .unwrap();
+        store_index(&mut conn, "p", &data).unwrap();
+        std::fs::write(&out, report_html(&conn, "p", &root).unwrap()).unwrap();
+    }
+
+    /// The shareable report: built from the index and analysis, never contains source text,
+    /// escapes everything it prints, and cannot load or run anything.
+    #[test]
+    fn the_report_explains_the_project_without_its_code() {
+        let (db, dir, _) = indexed();
+        let analysis = serde_json::json!({
+            "summary": "A demo project.",
+            "frameworks": ["React"],
+            "dependencies": [{"manifest": "package.json", "ecosystem": "npm", "deps": [{"name": "react", "version": "^19.0.0", "dev": false}]}],
+            "issues": [
+                {"severity": "info", "kind": "marker", "message": format!("{}: return secret_sauce(42)", "TO\u{44}O"), "file": "src/main.ts", "line": 3},
+                {"severity": "high", "kind": "secret", "message": "Possible hard-coded credential", "file": "src/lib/format.ts", "line": 1}
+            ]
+        });
+        db.conn()
+            .execute(
+                "UPDATE projects SET name = ?1, analysis = ?2 WHERE id = 'p'",
+                params!["demo <script>alert(1)</script>", analysis.to_string()],
+            )
+            .unwrap();
+        let html = report_html(&db.conn(), "p", &dir).unwrap();
+        // What it shows.
+        assert!(html.contains("<svg class=\"graph\"") && html.contains("src/lib"), "module graph");
+        assert!(html.contains("react") && html.contains("^19.0.0"), "declared dependencies");
+        assert!(html.contains("Possible hard-coded credential") && html.contains("src/lib/format.ts:1"));
+        assert!(html.contains("Code marker (to-do, fix-me or hack note)") && html.contains("src/main.ts:3"));
+        // What it never shows: source text, including what a finding quoted.
+        for code in ["secret_sauce", "return greet", "return fmt(name)", "export function", "GREETING = "] {
+            assert!(!html.contains(code), "source text leaked: {code}");
+        }
+        // Inert: escaped names, no scripts, nothing loaded from anywhere.
+        assert!(!html.contains("<script>") && html.contains("demo &lt;script&gt;"));
+        assert!(html.contains("default-src 'none'"));
+        assert!(!html.contains("http://") || !html.contains("src=\"http"), "no external resources");
+        // Without an index there is nothing to report.
+        db.conn().execute("DELETE FROM intel_files", []).unwrap();
+        assert!(report_html(&db.conn(), "p", &dir).unwrap_err().to_string().contains("Build the code index first"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// A small mixed project indexed into an in-memory database.
     fn indexed() -> (db::Db, std::path::PathBuf, IndexData) {

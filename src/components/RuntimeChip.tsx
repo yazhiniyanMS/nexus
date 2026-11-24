@@ -77,7 +77,7 @@ export function RuntimeChip({ onOpenLab }: { onOpenLab: () => void }) {
         <div data-testid="runtime-popover" className="absolute right-0 top-9 z-30 w-[26rem] space-y-2 rounded-md border border-line bg-panel p-3 shadow-xl">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold">Model runtimes on this machine</span>
-            <button type="button" className="ml-auto text-[11px] text-faint hover:text-ink" onClick={() => void load()}>{busy ? "checking…" : "refresh"}</button>
+            <button type="button" className="ml-auto text-2xs text-faint hover:text-ink" onClick={() => void load()}>{busy ? "checking…" : "refresh"}</button>
           </div>
           {error && <div className="text-xs text-danger">{error}</div>}
           {report?.runtimes.map((r) => (
@@ -88,12 +88,12 @@ export function RuntimeChip({ onOpenLab }: { onOpenLab: () => void }) {
               </div>
               {r.installed && (
                 <div className="mt-0.5 flex items-center gap-1">
-                  <span className="selectable min-w-0 flex-1 truncate font-mono text-[11px] text-faint">{r.installed.path}</span>
+                  <span className="selectable min-w-0 flex-1 truncate font-mono text-2xs text-faint">{r.installed.path}</span>
                   <CopyText text={r.installed.path} />
                 </div>
               )}
               {r.endpoints.map((e) => (
-                <div key={e.url} className="mt-1 flex items-center gap-1.5 text-[11px]">
+                <div key={e.url} className="mt-1 flex items-center gap-1.5 text-2xs">
                   <span className={clsx("size-1.5 shrink-0 rounded-full", e.running ? "bg-accent" : "bg-faint")} />
                   <span className="selectable font-mono text-dim">{e.url}</span>
                   <span className="text-faint">
@@ -105,10 +105,10 @@ export function RuntimeChip({ onOpenLab }: { onOpenLab: () => void }) {
             </div>
           ))}
           {report?.managed.filter((m) => m.status !== "exited").map((m) => (
-            <div key={m.id} className="text-[11px] text-dim">Started by NEXUS: <span className="font-mono">{m.url}</span> ({m.status})</div>
+            <div key={m.id} className="text-2xs text-dim">Started by NEXUS: <span className="font-mono">{m.url}</span> ({m.status})</div>
           ))}
           <div className="flex items-center gap-2 border-t border-line/60 pt-2">
-            <span className="min-w-0 flex-1 text-[11px] leading-relaxed text-faint">Status only. NEXUS never types into your terminal; copy an address if you need it in a command.</span>
+            <span className="min-w-0 flex-1 text-2xs leading-relaxed text-faint">Status only. NEXUS never types into your terminal; copy an address if you need it in a command.</span>
             <button type="button" className="flex shrink-0 items-center gap-1 text-xs text-accent hover:underline" onClick={() => { setOpen(false); onOpenLab(); }}>
               <FlaskConical size={12} /> Model Lab
             </button>

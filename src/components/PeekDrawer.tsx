@@ -17,7 +17,7 @@ export function PeekDrawer({ ws }: { ws: Workspace }) {
       <button aria-label="Close file" className="flex-1 bg-black/50" onClick={() => ws.peek(null)} />
       <aside className="flex w-[62%] min-w-[520px] flex-col border-l border-line bg-bg shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{baseName(t.path)}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{baseName(t.path)}</span>
           <button
             className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-dim hover:bg-raised hover:text-ink"
             onClick={() => {

@@ -23,6 +23,18 @@
   --color-ok: #86dfc4;
   --color-warn: #e2c27e;
   --color-danger: #ef8f8f;
+  --color-info: #8fb8ef;
+  /* Type scale (see docs/DESIGN.md): meta, secondary, body, title, subject */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-md: 15px;
+  --text-md--line-height: 22px;
+  --text-lg: 20px;
+  --text-lg--line-height: 28px;
   /* Radii: small controls, cards, dialogs */
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -44,7 +56,8 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 20px;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   user-select: none;
@@ -73,9 +86,12 @@ input,
   background: transparent;
 }
 
-:focus-visible {
-  outline: 1.5px solid var(--color-lav);
-  outline-offset: 1px;
+/* In the base layer so a component can give a large surface a subtler focus mark. */
+@layer base {
+  :focus-visible {
+    outline: 1.5px solid var(--color-lav);
+    outline-offset: 1px;
+  }
 }
 
 ::selection {
@@ -88,4 +104,27 @@ input,
 select,
 textarea {
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+/* Motion only marks a change of state; it is switched off when the system asks for less. */
+@keyframes nexus-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-status {
+  animation: nexus-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Placeholders are prose, even inside monospace fields. */
+input::placeholder,
+textarea::placeholder {
+  font-family: var(--font-sans);
 }

@@ -73,14 +73,14 @@ export function DownloadsList({ downloads, reload }: { downloads: Download[]; re
               <span className="selectable min-w-0 flex-1 truncate font-mono text-xs">{d.name}</span>
               <Badge tone={STATUS_TONE[d.status]}>{d.status}</Badge>
               {d.verified && d.status === "completed" && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-accent" title={d.kind === "ollama" ? "Ollama verified the downloaded layers" : `SHA-256 matched: ${d.sha256}`}>
+                <span className="inline-flex items-center gap-1 text-2xs text-accent" title={d.kind === "ollama" ? "Ollama verified the downloaded layers" : `SHA-256 matched: ${d.sha256}`}>
                   <ShieldCheck size={11} /> verified
                 </span>
               )}
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-faint" title={d.source}>{d.kind === "ollama" ? d.source : d.source.replace(/^https?:\/\//, "")}</div>
+            <div className="mt-0.5 truncate text-2xs text-faint" title={d.source}>{d.kind === "ollama" ? d.source : d.source.replace(/^https?:\/\//, "")}</div>
             {active && <div className="mt-2"><Progress value={pct} /></div>}
-            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-dim">
+            <div className="mt-1.5 flex items-center gap-2 text-2xs text-dim">
               <span className="tabular-nums">
                 {active || d.status !== "completed" ? `${fmtBytes(d.received_bytes)}${d.total_bytes ? ` of ${fmtBytes(d.total_bytes)}` : ""}${pct !== null && active ? ` · ${pct}%` : ""}` : fmtBytes(d.total_bytes ?? d.received_bytes)}
               </span>
@@ -146,7 +146,7 @@ function HuggingFace({ freeBytes, start }: { freeBytes: number | null; start: (f
               {repo.context_length !== null && <Badge>{fmtInt(repo.context_length)} ctx</Badge>}
               {repo.gated && <Badge tone="amber">gated</Badge>}
             </div>
-            <div className="selectable mt-1 truncate text-[11px] text-faint">{repo.page_url}</div>
+            <div className="selectable mt-1 truncate text-2xs text-faint">{repo.page_url}</div>
           </div>
           {repo.gated && <div className="text-xs text-warn">This repository asks visitors to accept its terms on Hugging Face first. NEXUS has no Hugging Face login, so these downloads will be refused.</div>}
           {repo.files.length === 0 && <div className="text-xs text-dim">This repository has no GGUF files.</div>}
@@ -154,7 +154,7 @@ function HuggingFace({ freeBytes, start }: { freeBytes: number | null; start: (f
             <div key={f.path} data-hf-file={f.path} className="flex items-center gap-2 rounded-md border border-line p-2">
               <div className="min-w-0 flex-1">
                 <div className="selectable truncate font-mono text-xs">{f.path}</div>
-                <div className="text-[11px] text-faint">
+                <div className="text-2xs text-faint">
                   {f.size_bytes !== null ? fmtBytes(f.size_bytes) : "size not stated"} · {f.sha256 ? "SHA-256 published, will be verified" : "no checksum published"}
                   {tooBig(f) && <span className="text-danger"> · larger than the free space</span>}
                 </div>
@@ -171,7 +171,7 @@ function HuggingFace({ freeBytes, start }: { freeBytes: number | null; start: (f
           {results.map((m) => (
             <button key={m.id} data-hf-repo={m.id} onClick={() => void run(async () => setRepo(await api.labHfFiles(m.id)))} className="block w-full rounded-md border border-line p-2 text-left hover:bg-raised">
               <div className="truncate font-mono text-xs">{m.id}</div>
-              <div className="mt-0.5 flex gap-3 text-[11px] text-faint">
+              <div className="mt-0.5 flex gap-3 text-2xs text-faint">
                 <span>{m.downloads !== null ? `${fmtInt(m.downloads)} downloads` : "downloads not stated"}</span>
                 <span>{m.license ?? "licence not stated"}</span>
                 {m.gated && <span className="text-warn">gated</span>}
@@ -266,7 +266,7 @@ export function AddModel({ ctx }: { ctx: LabCtx }) {
       )}
 
       {mode !== "ollama" && storage.data && (
-        <div className="text-[11px] text-faint">
+        <div className="text-2xs text-faint">
           Files go to <span className="selectable font-mono">{storage.data.dir}</span>
           {storage.data.free_bytes !== null ? ` · ${fmtBytes(storage.data.free_bytes)} free` : " · free space not reported on this system"}
         </div>

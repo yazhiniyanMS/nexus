@@ -233,14 +233,14 @@ Tables (migration 5): `settings`, `lab_models`, `lab_downloads`, `lab_sessions`,
 
 Events: `nexus://lab-infer` (streamed text and the final result, keyed by a request id the UI chooses), `nexus://lab-download`, `nexus://lab-bench`, `nexus://lab-runtime`.
 
-UI (`src/views/ModelLab.tsx`, `src/views/lab/`): Library (with Add model and Storage panels), Runtimes, Playground, Benchmarks, Compare, Providers. Pure logic (formatting that keeps unknown values distinct from zero, filtering, sorting, settings validation) is in `src/lib/lab.ts` with Node tests. Shared components outside the lab: `ProviderManager` (also used by AI Workspace), `ModelChoice` (Intelligence, Agents) and `RuntimeChip` (Terminal).
+UI (`src/views/ModelLab.tsx`, `src/views/lab/`): Library (with Add model and Storage panels), Runtimes, Playground, Benchmarks, Compare. Connections and model defaults live in Settings (`src/views/Settings.tsx`, using `lab/Defaults.tsx`); both screens load lab data through `lab/useLabData.ts`. Pure logic (formatting that keeps unknown values distinct from zero, filtering, sorting, settings validation) is in `src/lib/lab.ts` with Node tests. Shared components outside the lab: `ProviderManager` (Settings), `ModelChoice` (Intelligence, Agents) and `RuntimeChip` (Terminal).
 
 Integration:
 
 - **Project Intelligence:** Ask and the architecture narrative use the shared model chooser, which starts on the Model Lab default when that model is local, and the existing retrieval and citations.
 - **Agents:** a task gets an explicit connection and model at creation (the connection's default is resolved then and stored); disabled connections are refused; the task never switches model.
 - **Terminal:** a read-only runtime status chip with addresses to copy; it never types into a shell.
-- **AI Workspace:** starts on the default connection and says where messages go.
+- **Playground:** can fill the system prompt with the selected project's summary (never file contents); this replaced the former AI Workspace chat.
 
 Rules the implementation keeps:
 
@@ -300,3 +300,16 @@ The UI has one helper, `src/lib/platform.ts`, for modifier keys, shortcut labels
 **Release pipeline.** `.github/workflows/`: `pr.yml`, `ci.yml`, `release.yml` (draft releases from tags), `pages.yml`, and the shared `_build.yml`. Details and the verification table are in [RELEASES.md](RELEASES.md).
 
 **Not verified.** No Windows or Linux machine or virtual machine was available during development. Windows code was type-checked with a cross-compiler; neither system has run NEXUS until the workflows run.
+
+### 0.2.0 additions
+
+| Module | Responsibility |
+| --- | --- |
+| `src-tauri/src/exec/` | Execution policy for approved commands: levels (Trusted, Restricted, Isolated), the environment allow-list and credential detection (`env.rs`), and sandbox backends (`sandbox.rs`: a generated Seatbelt profile on macOS, bubblewrap on Linux). Settings are stored under the `exec` key. |
+| `src-tauri/src/jobs.rs` | The one runner for task and agent commands: builds the process from a `Policy`, applies resource limits, enforces the time limit, stops whole process trees (including `setsid` escapes), records running jobs so a crash's leftovers are stopped at the next start. |
+| `src-tauri/src/secrets.rs` | Credential detection in source text; `mask` for read-only prompts and the `Vault` that swaps values for placeholders in the Developer prompt and restores them in written files. |
+| `src-tauri/src/intel/report.rs` | The codebase report: a self-contained HTML document built from the analysis and the index, with an SVG module graph laid out by strongly connected components. `save_project_report` writes it through a native save dialog. |
+| `src/components/Welcome.tsx` | The guided first run (project, index, local model, next steps). |
+| `src/views/settings/Execution.tsx`, `src/components/ExecNote.tsx` | Execution settings, and the level/time-limit line on every approval. |
+
+Design decisions and their tests are recorded in [audit/SECURITY_AUDIT.md](audit/SECURITY_AUDIT.md) and [audit/RELIABILITY_AUDIT.md](audit/RELIABILITY_AUDIT.md).

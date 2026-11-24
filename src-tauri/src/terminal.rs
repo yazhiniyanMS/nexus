@@ -393,7 +393,7 @@ fn read_log(data_dir: &Path, id: &str) -> String {
 // ------------------------------------------------------------------ commands
 
 /// Stop shells whose session no longer exists, which happens when their project is removed.
-fn stop_orphans(state: &AppState) -> Result<()> {
+pub(crate) fn stop_orphans(state: &AppState) -> Result<()> {
     let running: Vec<(String, Option<u32>)> = state.terminal.live.lock().unwrap().iter().map(|(id, s)| (id.clone(), s.pid)).collect();
     for (id, pid) in running {
         let known: bool = state.db.conn().query_row("SELECT EXISTS(SELECT 1 FROM term_sessions WHERE id = ?1)", [&id], |r| r.get(0))?;

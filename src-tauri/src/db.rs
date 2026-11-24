@@ -1,6 +1,6 @@
 //! SQLite persistence. All application state lives in one local database file.
 
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -264,11 +264,22 @@ CREATE INDEX idx_lab_bench_runs_suite ON lab_bench_runs(suite_id, id);
         down: "DROP TABLE lab_bench_runs; DROP TABLE lab_bench_suites; DROP TABLE lab_sessions; DROP TABLE lab_downloads;
                DROP TABLE lab_models; DROP TABLE settings; ALTER TABLE providers DROP COLUMN enabled;",
     },
+    // Execution hardening: a task can carry its own time limit (seconds); NULL uses the default.
+    Migration { up: "ALTER TABLE tasks ADD COLUMN timeout_secs INTEGER;", down: "ALTER TABLE tasks DROP COLUMN timeout_secs;" },
 ];
 
 impl Db {
+    /// Open (or create) the database file, migrating it to the current schema. Before an
+    /// existing database is migrated, a copy is written next to it (`nexus.db.before-v<N>`).
     pub fn open(path: &Path) -> Result<Self> {
-        Self::init(Connection::open(path)?)
+        let conn = Connection::open(path).map_err(|e| unreadable(path, e))?;
+        // Reading the schema version is the first thing that touches the file's contents, so a
+        // file that is not a database (or is damaged) fails here with a readable message.
+        let version = schema_version(&conn).map_err(|e| unreadable(path, e))?;
+        if version > 0 && (version as usize) < MIGRATIONS.len() {
+            backup_before_migration(&conn, path, version)?;
+        }
+        Self::init(conn)
     }
 
     #[cfg(test)]
@@ -279,11 +290,24 @@ impl Db {
     fn init(mut conn: Connection) -> Result<Self> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        let version: usize = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        for (i, m) in MIGRATIONS.iter().enumerate().skip(version) {
+        // Several requests share one connection; a second process (or a backup tool) holding a
+        // lock briefly should make a write wait, not fail.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        let version = schema_version(&conn)?;
+        if version < 0 || version as usize > MIGRATIONS.len() {
+            // Opening a newer schema with older code could silently damage it.
+            return Err(AppError::Msg(format!(
+                "This database was created by a newer version of NEXUS (schema {version}; this version knows {}). \
+                 Install the newer version again, or move the database aside to start fresh.",
+                MIGRATIONS.len()
+            )));
+        }
+        for (i, m) in MIGRATIONS.iter().enumerate().skip(version as usize) {
+            // Each step and its version number commit together, so an interrupted upgrade
+            // resumes from the last finished step.
             let tx = conn.transaction()?;
             tx.execute_batch(m.up)?;
-            tx.pragma_update(None, "user_version", i + 1)?;
+            tx.pragma_update(None, "user_version", (i + 1) as i64)?;
             tx.commit()?;
         }
         Ok(Db(Mutex::new(conn)))
@@ -293,6 +317,34 @@ impl Db {
     pub fn conn(&self) -> MutexGuard<'_, Connection> {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+fn schema_version(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("PRAGMA user_version", [], |r| r.get(0))
+}
+
+fn unreadable(path: &Path, e: rusqlite::Error) -> AppError {
+    AppError::Msg(format!(
+        "NEXUS could not read its database at {}: {e}. The file may be damaged or not a NEXUS database. \
+         It has not been changed; move it aside to start fresh, or restore a backup.",
+        path.display()
+    ))
+}
+
+/// Copy an existing database before migrating it, so a failed or unwanted upgrade can be
+/// undone by putting the copy back. An existing copy for the same version is kept.
+fn backup_before_migration(conn: &Connection, path: &Path, version: i64) -> Result<()> {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".before-v{}", MIGRATIONS.len()));
+    let backup = path.with_file_name(name);
+    if backup.exists() {
+        return Ok(());
+    }
+    // VACUUM INTO writes a consistent copy, including anything still in the write-ahead log.
+    conn.execute("VACUUM INTO ?1", [backup.to_string_lossy()]).map_err(|e| {
+        AppError::Msg(format!("Could not back up the database (schema {version}) before upgrading it: {e}. Nothing was changed."))
+    })?;
+    Ok(())
 }
 
 pub fn now() -> String {
@@ -316,7 +368,7 @@ mod tests {
         for m in &MIGRATIONS[..previous] {
             conn.execute_batch(m.up).unwrap();
         }
-        conn.pragma_update(None, "user_version", previous).unwrap();
+        conn.pragma_update(None, "user_version", previous as i64).unwrap();
         conn.execute_batch(
             "INSERT INTO projects (id, name, path, added_at) VALUES ('proj', 'My project', '/tmp/my-project', '2026-01-01T00:00:00Z');
              INSERT INTO providers (id, name, kind, base_url, default_model, has_key, created_at)
@@ -328,8 +380,8 @@ mod tests {
 
         let db = Db::init(conn).unwrap();
         let conn = db.conn();
-        let version: usize = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(version, MIGRATIONS.len());
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version as usize, MIGRATIONS.len());
         let providers: Vec<(String, String, Option<String>, i64, i64)> = conn
             .prepare("SELECT id, base_url, default_model, has_key, enabled FROM providers ORDER BY created_at")
             .unwrap()
@@ -355,11 +407,85 @@ mod tests {
         assert_eq!(again, 2);
     }
 
+    fn scratch() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("nexus-db-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// An existing database on disk is copied before it is migrated, the copy holds the old
+    /// data at the old schema, and opening it again does not copy it again.
+    #[test]
+    fn an_upgrade_backs_up_the_database_first() {
+        let dir = scratch();
+        let path = dir.join("nexus.db");
+        let previous = MIGRATIONS.len() - 1;
+        {
+            let conn = Connection::open(&path).unwrap();
+            for m in &MIGRATIONS[..previous] {
+                conn.execute_batch(m.up).unwrap();
+            }
+            conn.pragma_update(None, "user_version", previous as i64).unwrap();
+            conn.execute("INSERT INTO projects (id, name, path, added_at) VALUES ('p', 'Mine', '/tmp/mine', 'x')", []).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(schema_version(&db.conn()).unwrap() as usize, MIGRATIONS.len());
+        drop(db);
+
+        let backup = dir.join(format!("nexus.db.before-v{}", MIGRATIONS.len()));
+        let copy = Connection::open(&backup).unwrap();
+        assert_eq!(schema_version(&copy).unwrap() as usize, previous, "the copy keeps the old schema");
+        let name: String = copy.query_row("SELECT name FROM projects", [], |r| r.get(0)).unwrap();
+        assert_eq!(name, "Mine");
+        drop(copy);
+
+        // A fresh database has nothing to back up; an up-to-date one is not copied again.
+        let modified = std::fs::metadata(&backup).unwrap().modified().unwrap();
+        Db::open(&path).unwrap();
+        assert_eq!(std::fs::metadata(&backup).unwrap().modified().unwrap(), modified);
+        Db::open(&dir.join("fresh.db")).unwrap();
+        assert!(!dir.join(format!("fresh.db.before-v{}", MIGRATIONS.len())).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Older code must not open (and so possibly damage) a database a newer version created.
+    #[test]
+    fn a_newer_schema_is_refused_and_left_alone() {
+        let dir = scratch();
+        let path = dir.join("nexus.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch("CREATE TABLE future (x)").unwrap();
+            conn.pragma_update(None, "user_version", (MIGRATIONS.len() + 3) as i64).unwrap();
+        }
+        let err = Db::open(&path).err().expect("must refuse").to_string();
+        assert!(err.contains("newer version of NEXUS"), "{err}");
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(schema_version(&conn).unwrap() as usize, MIGRATIONS.len() + 3, "untouched");
+        let tables: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", [], |r| r.get(0)).unwrap();
+        assert_eq!(tables, 1, "no migration ran");
+        drop(conn); // Windows cannot delete a folder holding an open database file
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A file that is not a database gives a readable error and is not modified.
+    #[test]
+    fn a_damaged_file_is_reported_not_overwritten() {
+        let dir = scratch();
+        let path = dir.join("nexus.db");
+        let junk = b"this is not a database, just some bytes that happen to be here".repeat(200);
+        std::fs::write(&path, &junk).unwrap();
+        let err = Db::open(&path).err().expect("must fail").to_string();
+        assert!(err.contains("could not read its database") && err.contains("has not been changed"), "{err}");
+        assert_eq!(std::fs::read(&path).unwrap(), junk);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn migrations_apply() {
         let db = Db::in_memory().unwrap();
-        let v: usize = db.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, MIGRATIONS.len());
+        let v: i64 = db.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v as usize, MIGRATIONS.len());
     }
 
     fn tables(db: &Db) -> Vec<String> {

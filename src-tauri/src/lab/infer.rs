@@ -412,7 +412,7 @@ pub async fn run(
     };
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
+        let body = ai::read_body_prefix(resp, ai::MAX_ERROR_BYTES).await;
         return Err(ai::error_detail(status, &body, &redactor));
     }
 

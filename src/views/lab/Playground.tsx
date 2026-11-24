@@ -17,7 +17,7 @@ function Thinking({ text, live }: { text: string; live?: boolean }) {
   if (!text) return null;
   return (
     <div className="mb-2">
-      <button className="flex items-center gap-1 text-[11px] text-faint hover:text-dim" onClick={() => setOpen((o) => !o)}>
+      <button className="flex items-center gap-1 text-2xs text-faint hover:text-dim" onClick={() => setOpen((o) => !o)}>
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />} {live ? "Thinking…" : "Thinking"} ({text.length.toLocaleString()} characters)
       </button>
       {open && <div className="selectable mt-1 border-l-2 border-line pl-3 text-xs leading-relaxed whitespace-pre-wrap text-dim">{text}</div>}
@@ -222,7 +222,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
             <div key={s.id} data-session={s.title} className={clsx("group mb-0.5 flex items-start gap-1 rounded-md px-2 py-1.5", sessionId === s.id ? "bg-raised" : "hover:bg-raised/60")}>
               <button className="min-w-0 flex-1 text-left" onClick={() => void open(s)} disabled={!!running}>
                 <div className="truncate text-xs font-medium">{s.title}</div>
-                <div className="truncate text-[11px] text-faint">{s.model ?? "no model"} · {s.turns} turns · {timeAgo(s.updated_at)}</div>
+                <div className="truncate text-2xs text-faint">{s.model ?? "no model"} · {s.turns} turns · {timeAgo(s.updated_at)}</div>
               </button>
               <button
                 className="mt-0.5 hidden text-faint hover:text-danger group-hover:block"
@@ -245,7 +245,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
         <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line px-4 py-2">
           <ModelPicker ctx={ctx} idPrefix="playground" providerId={providerId} model={model} disabled={!!running} onChange={(p, m) => { if (p !== providerId) setAllowRemote(false); setProviderId(p); setModel(m); }} />
           {provider && <LocalBadge provider={provider} />}
-          <span className="ml-auto flex items-center gap-2 text-[11px] text-faint">
+          <span className="ml-auto flex items-center gap-2 text-2xs text-faint">
             {turns.length > 0 && (saved ? (sessionId ? "saved" : "") : "not saved")}
           </span>
         </div>
@@ -253,7 +253,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="mx-auto max-w-3xl space-y-4 p-5">
             {turns.length === 0 && !running && (
-              <div className="pt-10 text-center text-[13px] leading-relaxed text-faint">
+              <div className="pt-10 text-center text-sm leading-relaxed text-faint">
                 Enter a prompt to run it against <span className="font-mono text-dim">{model || "a model"}</span>.
                 Timings are measured here; token counts come from the runtime and show as a dash when it reports none.
               </div>
@@ -262,12 +262,12 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
               <div key={i} data-turn={t.role} className={clsx("flex", t.role === "user" && "justify-end")}>
                 <div className={clsx("max-w-[88%] rounded-lg px-3.5 py-2.5", t.role === "user" ? "bg-raised" : "w-full border border-line bg-panel")}>
                   {t.role === "assistant" && <Thinking text={t.thinking ?? ""} />}
-                  <div className="selectable text-[13.5px] leading-relaxed break-words whitespace-pre-wrap">{t.content || (t.role === "assistant" && !t.error ? <span className="text-faint">(no text was generated)</span> : null)}</div>
+                  <div className="selectable text-sm leading-relaxed break-words whitespace-pre-wrap">{t.content || (t.role === "assistant" && !t.error ? <span className="text-faint">(no text was generated)</span> : null)}</div>
                   {t.error && <div className="selectable mt-2 text-xs text-danger">{t.error}</div>}
                   {t.role === "assistant" && t.metrics && (
                     <div className="mt-2 border-t border-line/60 pt-2">
                       <MetricsLine metrics={t.metrics} />
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-faint">
+                      <div className="mt-1 flex items-center gap-2 text-2xs text-faint">
                         <span className="font-mono">{t.model}</span>
                         <span>· {t.provider_name} ({t.runtime})</span>
                         <span>· {t.local ? "ran on this machine" : "ran remotely"}</span>
@@ -284,8 +284,8 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
             {running && (
               <div data-testid="running" className="w-full rounded-lg border border-accent/30 bg-panel px-3.5 py-2.5">
                 <Thinking text={running.thinking} live />
-                <div className="selectable text-[13.5px] leading-relaxed break-words whitespace-pre-wrap">{running.text}<span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-accent align-middle" /></div>
-                <div className="mt-2 flex items-center gap-3 border-t border-line/60 pt-2 text-[11px] text-dim">
+                <div className="selectable text-sm leading-relaxed break-words whitespace-pre-wrap">{running.text}<span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-accent align-middle" /></div>
+                <div className="mt-2 flex items-center gap-3 border-t border-line/60 pt-2 text-2xs text-dim">
                   <span data-testid="run-status">
                     {running.firstAt === null ? "Waiting for the first token (a model that is not loaded yet takes longer)" : "Generating"} · {fmtMs(elapsed)}
                   </span>
@@ -314,7 +314,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
                 }}
                 rows={3}
                 placeholder="Prompt…  (Enter to run, Shift+Enter for a new line)"
-                className="flex-1 resize-none rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
+                className="flex-1 resize-none rounded-md border border-line bg-bg p-2.5 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none"
               />
               {running ? (
                 <Button type="button" variant="danger" onClick={() => void api.labInferCancel(running.id)}><Square size={12} /> Stop</Button>
@@ -322,7 +322,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
                 <Button type="submit" variant="primary" disabled={!draft.trim() || !!blocked} title={blocked}><Send size={13} /> Run</Button>
               )}
             </div>
-            {blocked && draft.trim() && !running && <div className="text-[11px] text-warn">{blocked}</div>}
+            {blocked && draft.trim() && !running && <div className="text-2xs text-warn">{blocked}</div>}
           </div>
         </form>
       </div>
@@ -331,10 +331,10 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold">Generation settings</span>
-            <button className="text-[11px] text-faint hover:text-dim" disabled={!!running} onClick={() => setParams(emptyParams())}>reset</button>
+            <button className="text-2xs text-faint hover:text-dim" disabled={!!running} onClick={() => setParams(emptyParams())}>reset</button>
           </div>
           <ParamsEditor kind={kind} value={params} onChange={setParams} onError={setParamError} disabled={!!running} />
-          <div className="mt-2 text-[11px] leading-relaxed text-faint">Sent with the next run: {describeParams(paramsFor(params, kind?.params ?? []))}.</div>
+          <div className="mt-2 text-2xs leading-relaxed text-faint">Sent with the next run: {describeParams(paramsFor(params, kind?.params ?? []))}.</div>
         </div>
         <div>
           <button className="flex items-center gap-1 text-xs font-semibold" onClick={() => setShowSystem((s) => !s)}>
@@ -351,6 +351,20 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
               className="mt-2 w-full resize-y rounded-md border border-line bg-bg p-2 text-xs placeholder:text-faint focus:border-lav/60 focus:outline-none"
             />
           )}
+          {showSystem && ctx.ws.project?.analysis && (
+            <button
+              type="button"
+              className="mt-1 text-2xs text-accent hover:underline disabled:opacity-40"
+              disabled={!!running}
+              onClick={() => {
+                const p = ctx.ws.project!;
+                const a = p.analysis!;
+                setSystem(`You are a coding assistant. The user is working on the project "${p.name}".\nSummary: ${a.summary}\nLanguages: ${a.languages.slice(0, 8).map((l) => l.name).join(", ")}\nFrameworks: ${a.frameworks.join(", ") || "none detected"}\nYou cannot read files directly; ask the user to paste code when needed.`);
+              }}
+            >
+              Use a summary of {ctx.ws.project.name} (no file contents)
+            </button>
+          )}
         </div>
         <div className="space-y-2 border-t border-line/60 pt-3">
           <div className="text-xs font-semibold">Session</div>
@@ -359,7 +373,7 @@ export default function PlaygroundTab({ ctx, target }: { ctx: LabCtx; target: La
             <Button size="sm" disabled={turns.length === 0 || !!running} onClick={() => void persist(turns, true)}><Save size={12} /> {sessionId ? "Save changes" : "Save session"}</Button>
             <ConfirmButton label="Clear" confirm="Clear the conversation" disabled={turns.length === 0 || !!running} onConfirm={reset} />
           </div>
-          <div className="text-[11px] leading-relaxed text-faint">
+          <div className="text-2xs leading-relaxed text-faint">
             Sessions are stored on this machine only. {sessionId ? "This session is updated after every run." : "An unsaved session is lost when you leave the Model Lab."}
           </div>
         </div>

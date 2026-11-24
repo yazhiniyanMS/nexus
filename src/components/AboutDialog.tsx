@@ -45,14 +45,14 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4">
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-4">
           <LifeBuoy size={15} className="text-lav" />
-          <span className="text-[13px] font-semibold">About NEXUS and feedback</span>
+          <span className="text-sm font-semibold">About NEXUS and feedback</span>
           <button className="ml-auto grid size-7 place-items-center rounded text-faint hover:bg-raised hover:text-ink" onClick={onClose} title="Close"><X size={14} /></button>
         </div>
         {!info || !feedback ? (error ? <div className="p-4"><ErrorBanner message={error} /></div> : <Spinner />) : (
           <div className="space-y-4 overflow-auto p-4">
-            <dl className="selectable grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5 text-[13px]">
+            <dl className="selectable grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5 text-sm">
               <dt className="text-dim">Version</dt><dd data-testid="about-version">{info.app_version} (public beta)</dd>
               <dt className="text-dim">System</dt><dd>{info.os} {info.os_version ?? ""} · {info.arch}</dd>
               <dt className="text-dim">Git</dt><dd>{info.git_version ? `${info.git_version}` : <span className="text-warn">not found</span>}</dd>
@@ -64,7 +64,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-xs font-medium text-dim">Diagnostic report</span>
-                <span className="text-[11px] text-faint">Read it, edit it if you like. Nothing is sent until you send it.</span>
+                <span className="text-2xs text-faint">Read it, edit it if you like. Nothing is sent until you send it.</span>
               </div>
               <textarea
                 aria-label="Diagnostic report"
@@ -74,7 +74,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                 spellCheck={false}
                 className="w-full resize-y rounded-md border border-line bg-bg p-2.5 font-mono text-xs leading-relaxed focus:border-lav/60 focus:outline-none"
               />
-              <p className="mt-1 text-[11px] leading-relaxed text-faint">
+              <p className="mt-1 text-2xs leading-relaxed text-faint">
                 Contains versions, your system, which tools were found and counts. It never contains source code, terminal output,
                 file or project names, provider addresses, API keys or environment variables.
               </p>
@@ -90,7 +90,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
               <Button disabled={!feedback.links_available} onClick={() => open("feature", "Feature request form")}><Lightbulb size={13} /> Request a feature</Button>
               <Button variant="ghost" disabled={!feedback.links_available} onClick={() => open("docs", "Documentation")}>Documentation</Button>
             </div>
-            <p className="text-[11px] leading-relaxed text-faint">
+            <p className="text-2xs leading-relaxed text-faint">
               {feedback.links_available
                 ? `The forms are on GitHub (${feedback.repository}) and need a GitHub account. Without one, copy or save the report and send it to the maintainers by any channel you already use. Paste the report into the form yourself; NEXUS does not attach it.`
                 : "This build was made without a public repository address, so the forms cannot be opened from here. Copy or save the report and send it to whoever gave you this build."}

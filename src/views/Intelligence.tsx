@@ -6,7 +6,7 @@ import type { Workspace } from "../App";
 import { FilePreview } from "../components/FilePreview";
 import { GraphView } from "../components/GraphView";
 import { ModelChoiceControls, ModelChoiceNotice, useModelChoice } from "../components/ModelChoice";
-import { Badge, Button, Card, Empty, ErrorBanner, Input, PageHeader, Select, Spinner, Tabs } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorBanner, Input, Select, Spinner, Tabs, ViewHeader } from "../components/ui";
 import { api, INDEX_PROGRESS, type Answer, type Provider, type Reference, type Source, type SymbolHit } from "../lib/api";
 import { errorText, formatNumber, timeAgo, useAsync } from "../lib/util";
 
@@ -33,9 +33,10 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2 text-xs text-dim">
-        <Select aria-label="Graph level" className="w-52!" value={mode} onChange={(e) => setMode(e.target.value)}>
+        <Select aria-label="Graph level" className="w-64!" value={mode} onChange={(e) => setMode(e.target.value)}>
           <option value="module-1">Architecture map (top-level modules)</option>
           <option value="module-2">Architecture map (two levels)</option>
+          <option value="module-3">Architecture map (three levels)</option>
           <option value="file">File dependency graph</option>
         </Select>
         <label className="flex items-center gap-1.5">
@@ -59,7 +60,7 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
             <GraphView graph={g} selected={selected} onSelect={setSelected} />
           )}
         </div>
-        <aside className="w-72 shrink-0 overflow-auto border-l border-line p-4 text-[13px]" data-testid="graph-details">
+        <aside className="w-72 shrink-0 overflow-auto border-l border-line p-4 text-sm" data-testid="graph-details">
           {!node ? (
             <div className="space-y-3 text-xs leading-relaxed text-dim">
               <p>Click a node to see what it depends on and what depends on it. Drag to move nodes, drag the background to pan, scroll to zoom.</p>
@@ -67,7 +68,7 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
               {g && g.cycles.length > 0 && (
                 <div>
                   <div className="mb-1 font-semibold text-danger">Cycles</div>
-                  {g.cycles.map((c, i) => <div key={i} className="selectable mb-1 font-mono text-[11px] break-all">{c.join(" ↔ ")}</div>)}
+                  {g.cycles.map((c, i) => <div key={i} className="selectable mb-1 font-mono text-2xs break-all">{c.join(" ↔ ")}</div>)}
                 </div>
               )}
             </div>
@@ -93,7 +94,7 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
                   {list.map((e) => (
                     <button key={e[key]} onClick={() => setSelected(e[key])} className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-raised">
                       <span className="truncate font-mono text-xs">{label(e[key])}</span>
-                      <span className="ml-auto shrink-0 text-[11px] text-faint">{e.weight}×</span>
+                      <span className="ml-auto shrink-0 text-2xs text-faint">{e.weight}×</span>
                     </button>
                   ))}
                 </div>
@@ -137,10 +138,10 @@ function SymbolsTab({ projectId }: { projectId: string }) {
               className={clsx("block w-full border-b border-line/60 px-3 py-1.5 text-left hover:bg-raised", picked === s && "bg-raised")}
             >
               <div className="flex items-center gap-2">
-                <span className="truncate font-mono text-[13px]">{s.name}</span>
+                <span className="truncate font-mono text-sm">{s.name}</span>
                 <Badge>{s.kind}</Badge>
               </div>
-              <div className="truncate font-mono text-[11px] text-faint">{s.path}:{s.line}</div>
+              <div className="truncate font-mono text-2xs text-faint">{s.path}:{s.line}</div>
             </button>
           ))}
         </div>
@@ -186,14 +187,14 @@ function Cited({ text, sources, onOpen }: { text: string; sources: Source[]; onO
     if (!source) continue;
     parts.push(text.slice(last, m.index));
     parts.push(
-      <button key={m.index} title={`${source.path}:${source.start_line}`} onClick={() => onOpen(source)} className="mx-0.5 rounded bg-accent/15 px-1 font-mono text-[11px] text-accent hover:bg-accent/30">
+      <button key={m.index} title={`${source.path}:${source.start_line}`} onClick={() => onOpen(source)} className="mx-0.5 rounded bg-accent/15 px-1 font-mono text-2xs text-accent hover:bg-accent/30">
         {source.n}
       </button>,
     );
     last = m.index! + m[0].length;
   }
   parts.push(text.slice(last));
-  return <div className="selectable text-[13.5px] leading-relaxed whitespace-pre-wrap">{parts}</div>;
+  return <div className="selectable text-sm leading-relaxed whitespace-pre-wrap">{parts}</div>;
 }
 
 function AskTab({ projectId, ws, providers }: { projectId: string; ws: Workspace; providers: Provider[] }) {
@@ -245,7 +246,7 @@ function AskTab({ projectId, ws, providers }: { projectId: string; ws: Workspace
             rows={2}
             aria-label="Question"
             placeholder={focus ? "Ask about this file, or leave blank for an explanation of how it fits in…" : "Ask how something works, e.g. “how does task approval work?”"}
-            className="w-full resize-none rounded-md border border-line bg-bg p-2.5 text-[13px] placeholder:text-faint focus:border-lav/60 focus:outline-none"
+            className="w-full resize-none rounded-md border border-line bg-bg p-2.5 text-sm placeholder:text-faint focus:border-lav/60 focus:outline-none"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void ask(); }
             }}
@@ -263,7 +264,7 @@ function AskTab({ projectId, ws, providers }: { projectId: string; ws: Workspace
         {answer && (
           <Card className="p-4" >
             <Cited text={answer.answer} sources={answer.sources} onOpen={open} />
-            <div className="mt-3 text-[11px] text-faint">
+            <div className="mt-3 text-2xs text-faint">
               {answer.model} · {(answer.duration_ms / 1000).toFixed(1)}s
               {answer.input_tokens !== null && ` · ${formatNumber(answer.input_tokens ?? 0)} in / ${formatNumber(answer.output_tokens ?? 0)} out tokens`}
             </div>
@@ -275,11 +276,11 @@ function AskTab({ projectId, ws, providers }: { projectId: string; ws: Workspace
             {sources.map((s) => (
               <Card key={s.n} className="overflow-hidden">
                 <button onClick={() => open(s)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-raised">
-                  <span className="rounded bg-accent/15 px-1.5 font-mono text-[11px] text-accent">{s.n}</span>
+                  <span className="rounded bg-accent/15 px-1.5 font-mono text-2xs text-accent">{s.n}</span>
                   <span className="truncate font-mono text-xs text-lav">{s.path}:{s.start_line}-{s.end_line}</span>
-                  <span className="ml-auto shrink-0 truncate text-[11px] text-faint">{s.reason}</span>
+                  <span className="ml-auto shrink-0 truncate text-2xs text-faint">{s.reason}</span>
                 </button>
-                <pre className="selectable max-h-36 overflow-auto border-t border-line bg-bg px-3 py-2 font-mono text-[11px] leading-4 text-dim">{s.text}</pre>
+                <pre className="selectable max-h-36 overflow-auto border-t border-line bg-bg px-3 py-2 font-mono text-2xs leading-4 text-dim">{s.text}</pre>
               </Card>
             ))}
           </div>
@@ -333,6 +334,19 @@ function DocsTab({ projectId, name, providers }: { projectId: string; name: stri
             }}
           >
             <Download size={13} /> Save as…
+          </Button>
+          <Button
+            title="A self-contained HTML report with the module graph, hotspots, dependencies and findings. It contains no source code."
+            onClick={async () => {
+              try {
+                const saved = await api.saveProjectReport(projectId, true);
+                if (saved) setNote(`Report saved to ${saved}`);
+              } catch (e) {
+                setError(errorText(e));
+              }
+            }}
+          >
+            <FileText size={13} /> Report (HTML)…
           </Button>
         </div>
       </div>
@@ -391,7 +405,7 @@ export default function IntelligenceView({ ws }: { ws: Workspace }) {
   if (!project || !id)
     return (
       <>
-        <PageHeader title="Intelligence" />
+        <ViewHeader title="Intelligence" />
         <Empty icon={<Network size={28} />} title="Import a project to explore its structure" />
       </>
     );
@@ -400,10 +414,10 @@ export default function IntelligenceView({ ws }: { ws: Workspace }) {
   const ready = !!s?.indexed_at;
   return (
     <>
-      <PageHeader
+      <ViewHeader
         title="Intelligence"
-        subtitle={indexing ?? (ready ? `${project.name} · ${formatNumber(s.files)} files · ${formatNumber(s.symbols)} symbols · ${formatNumber(s.imports)} imports · indexed ${timeAgo(s.indexed_at)}` : `${project.name} · not indexed yet`)}
-        actions={<Button busy={!!indexing} disabled={!project.exists} onClick={() => rebuild(id)}><RefreshCw size={13} /> Rebuild index</Button>}
+        context={<span>{indexing ?? (ready ? `${project.name} · ${formatNumber(s.files)} files · ${formatNumber(s.symbols)} symbols · ${formatNumber(s.imports)} imports · indexed ${timeAgo(s.indexed_at)}` : `${project.name} · not indexed yet`)}</span>}
+        actions={<Button size="sm" busy={!!indexing} disabled={!project.exists} onClick={() => rebuild(id)}><RefreshCw size={12} /> Rebuild index</Button>}
       />
       <Tabs
         value={tab}

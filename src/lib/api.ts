@@ -20,7 +20,11 @@ export interface SearchMatch { kind: "file" | "content"; project_id: string; pro
 export interface SearchResult { matches: SearchMatch[]; files_scanned: number; files_skipped: number; truncated: boolean }
 
 export interface FileStatus { path: string; orig_path: string | null; index: string; worktree: string; untracked: boolean; conflicted: boolean }
-export interface GitStatus { is_repo: boolean; branch: string | null; upstream: string | null; ahead: number; behind: number; files: FileStatus[] }
+export interface GitStatus {
+  is_repo: boolean; branch: string | null; upstream: string | null; ahead: number; behind: number; files: FileStatus[];
+  merging: boolean; rebasing: boolean; has_commits: boolean;
+}
+export interface Committed { hash: string; short: string; subject: string }
 export interface Branch { name: string; commit: string; upstream: string | null; date: string; current: boolean; remote: boolean; subject: string }
 export interface Commit { hash: string; short: string; author: string; email: string; date: string; subject: string; refs: string }
 
@@ -45,6 +49,8 @@ export type StepStatus = TaskStatus | "skipped";
 export interface Task {
   id: string; project_id: string | null; project_name: string | null; title: string; description: string;
   status: TaskStatus; created_at: string; updated_at: string; step_count: number; steps_done: number;
+  /** This task's own time limit per step in seconds; null uses the default from Settings. */
+  timeout_secs: number | null;
 }
 export interface Step {
   id: string; task_id: string; position: number; title: string; kind: "manual" | "command"; command: string | null;
@@ -52,6 +58,16 @@ export interface Step {
   risk: "normal" | "high";
 }
 export interface TaskDetail { task: Task; steps: Step[] }
+export type ExecLevel = "trusted" | "restricted" | "isolated";
+export interface ExecSettings {
+  task_level: ExecLevel; agent_level: ExecLevel; task_timeout_secs: number; agent_timeout_secs: number; output_limit_kb: number;
+  allowed_env: string[]; max_file_mb: number; memory_mb: number; max_concurrent_agents: number; max_queued_agents: number;
+  max_running_tasks: number;
+}
+export interface ExecCapabilities {
+  backend: string | null; os: string;
+  levels: { level: ExecLevel; available: boolean; description: string }[];
+}
 export interface ActivityEntry { id: number; at: string; kind: string; message: string; project_id: string | null; project_name: string | null }
 export interface Stats {
   projects: number; analyzed_projects: number; tasks_total: number; tasks_active: number; tasks_completed: number;
@@ -222,6 +238,7 @@ export interface PlatformInfo {
   data_dir: string; shell: string; git: string | null; git_version: string | null;
   secure_storage: string; data_dir_overridden: boolean;
 }
+export interface AppPrefs { start_view: "dashboard" | "last"; last_view: string | null }
 export interface FeedbackInfo { app_version: string; diagnostics: string; links_available: boolean; repository: string | null }
 export type FeedbackPage = "bug" | "feature" | "install" | "issues" | "docs" | "releases";
 
@@ -231,6 +248,10 @@ export const api = {
   /** Opens one of the project's fixed public pages in the browser; returns the address opened. */
   openFeedback: (kind: FeedbackPage) => invoke<string>("open_feedback", { kind }),
   onboardingDone: () => invoke<boolean>("onboarding_done"),
+  onboardingReset: () => invoke<void>("onboarding_reset"),
+  appPrefs: () => invoke<AppPrefs>("app_prefs_get"),
+  appPrefsSetStart: (startView: AppPrefs["start_view"]) => invoke<AppPrefs>("app_prefs_set_start", { startView }),
+  appPrefsSetLastView: (view: string) => invoke<void>("app_prefs_set_last_view", { view }),
   onboardingFinish: () => invoke<void>("onboarding_finish"),
   termShells: () => invoke<string[]>("term_shells"),
 
@@ -250,6 +271,8 @@ export const api = {
     invoke<string>("git_diff", { projectId, path, staged, untracked }),
   gitStage: (projectId: string, paths: string[]) => invoke<void>("git_stage", { projectId, paths }),
   gitUnstage: (projectId: string, paths: string[]) => invoke<void>("git_unstage", { projectId, paths }),
+  /** Commits what is staged. Refuses with conflicts or nothing staged; never stages by itself. */
+  gitCommit: (projectId: string, message: string) => invoke<Committed>("git_commit", { projectId, message }),
   gitShow: (projectId: string, hash: string) => invoke<string>("git_show", { projectId, hash }),
 
   rebuildIndex: (projectId: string) => invoke<IndexStatus>("rebuild_index", { projectId }),
@@ -268,6 +291,8 @@ export const api = {
   architectureDoc: (projectId: string, providerId: string | null, model: string | null, allowRemote = false) =>
     invoke<string>("architecture_doc", { projectId, providerId, model, allowRemote }),
   exportText: (suggestedName: string, content: string) => invoke<string | null>("export_text", { suggestedName, content }),
+  /** Make the shareable HTML report, save it where the user picks, and open it if asked. */
+  saveProjectReport: (projectId: string, open: boolean) => invoke<string | null>("save_project_report", { projectId, open }),
 
   agentRoles: () => invoke<RoleInfo[]>("agent_roles"),
   listAgentRuns: () => invoke<AgentRun[]>("list_agent_runs"),
@@ -365,6 +390,10 @@ export const api = {
     invoke<number>("plan_with_ai", { taskId, providerId, model }),
   runTask: (id: string) => invoke<void>("run_task", { id }),
   cancelTask: (id: string) => invoke<void>("cancel_task", { id }),
+  setTaskTimeout: (id: string, timeoutSecs: number | null) => invoke<Task>("set_task_timeout", { id, timeoutSecs }),
+  execCapabilities: () => invoke<ExecCapabilities>("exec_capabilities"),
+  execSettings: () => invoke<ExecSettings>("exec_settings_get"),
+  execSettingsSet: (settings: ExecSettings) => invoke<ExecSettings>("exec_settings_set", { settings }),
   approveStep: (taskId: string, stepId: string, approved: boolean) =>
     invoke<void>("approve_step", { taskId, stepId, approved }),
   resetTask: (id: string) => invoke<void>("reset_task", { id }),

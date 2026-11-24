@@ -22,7 +22,6 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, watch};
 
 /// Runs executing at once. Others wait in the queue.
-const MAX_CONCURRENT: usize = 2;
 const MODEL_ATTEMPTS: u32 = 3;
 const CONTEXT_FILE_BYTES: usize = 60_000;
 const MAX_AI_COMMANDS: usize = 3;
@@ -70,7 +69,8 @@ pub fn pump<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<AppState>();
     loop {
         let running: Vec<String> = state.agents.active.lock().unwrap_or_else(|e| e.into_inner()).keys().cloned().collect();
-        if running.len() >= MAX_CONCURRENT {
+        let limit = crate::exec::load(&state.db.conn()).max_concurrent_agents as usize;
+        if running.len() >= limit {
             return;
         }
         let queued: Vec<String> = {
@@ -502,16 +502,36 @@ impl<R: Runtime> Driver<R> {
         roles::require(Role::Developer, Capability::ReadProject)?;
         self.update(step, "running", None, None)?;
         let plan: Plan = serde_json::from_str(&self.output_of("plan")?).unwrap_or_default();
+        // Protected editing: credentials in the files go to the model as placeholders and come
+        // back as the real values when the files are written, so the provider never sees them and
+        // the code is not changed by the protection.
+        let mut vault = crate::secrets::Vault::default();
         let mut files = String::new();
         for path in &plan.files {
             match workspace::read_file(worktree, path, CONTEXT_FILE_BYTES) {
-                Some(text) => files.push_str(&format!("### {path}\n```\n{text}\n```\n\n")),
+                Some(text) => files.push_str(&format!("### {path}\n```\n{}\n```\n\n", vault.protect(&text))),
                 None => files.push_str(&format!("### {path}\n(does not exist yet, or cannot be read as text)\n\n")),
             }
         }
         self.log(Some(step), Role::Developer.id(), "tool", &format!("Read {} files from the workspace", plan.files.len()));
-        let (system, user) = roles::developer_prompt(outcome, &plan, &files);
-        let changes: Changes = self.ask(client, step, Role::Developer, system, user).await?;
+        if !vault.is_empty() {
+            self.log(
+                Some(step),
+                Role::Developer.id(),
+                "tool",
+                &format!("{} credential value(s) were sent as placeholders, not as their values", vault.len()),
+            );
+        }
+        let (mut system, user) = roles::developer_prompt(outcome, &plan, &files);
+        if let Some(rule) = vault.instruction() {
+            system = format!("{system}\n\n{rule}");
+        }
+        let mut changes: Changes = self.ask(client, step, Role::Developer, system, user).await?;
+        for change in &mut changes.changes {
+            change.content = vault
+                .restore(&change.content)
+                .map_err(|e| Stop::Failed(format!("Refused the Developer's change to {}: {e}", change.path)))?;
+        }
 
         roles::require(Role::Developer, Capability::WriteWorkspace)?;
         if changes.changes.len() > workspace::MAX_CHANGED_FILES {
@@ -588,12 +608,23 @@ impl<R: Runtime> Driver<R> {
         self.update(step, "running", Some(""), None)?;
         self.log(Some(step), Role::Testing.id(), "tool", &format!("Running `{}` in the workspace", spec.command));
         let (app, run_id, step_id) = (self.app.clone(), self.run_id.clone(), step.id.clone());
-        let exec = jobs::run_command(&spec.command, Some(worktree), true, &mut self.cancel, |chunk| {
+        let policy = {
+            let state = self.app.state::<AppState>();
+            let settings = crate::exec::load(&state.db.conn());
+            crate::exec::Policy::for_agent(&settings, Some(&state.data_dir))
+        };
+        let run = jobs::RunSpec { command: &spec.command, cwd: worktree, policy: &policy };
+        let exec = jobs::run_command(&run, &mut self.cancel, |chunk| {
             let _ = app.emit(EVENT_OUTPUT, OutputEvent { run_id: &run_id, step_id: &step_id, chunk });
         })
         .await;
         match exec {
             Err(e) => self.update(step, "failed", Some(&format!("Could not start the command: {e}")), Some("could not start")),
+            Ok(e) if e.timed_out => {
+                let limit = crate::exec::format_duration(policy.timeout);
+                self.log(Some(step), Role::Testing.id(), "error", &format!("Command stopped after its time limit of {limit}"));
+                self.update(step, "failed", Some(&e.output), Some(&format!("timed out after {limit}")))
+            }
             Ok(e) if e.cancelled => {
                 let state = self.app.state::<AppState>();
                 set_step(&state.db.conn(), &step.id, "cancelled", Some(&e.output), None)?;
