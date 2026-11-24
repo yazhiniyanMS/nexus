@@ -61,3 +61,13 @@ Remaining recommendations, in order: run the PR workflow on Windows/Linux; scrub
 1. Push a branch and run the pull-request workflow (Linux with bubblewrap, Windows, macOS execution job); fix what it finds. **Needs the user's go-ahead: they asked for no commits.**
 2. Windows isolation backend (restricted token or AppContainer, job object for memory and process limits) (R11).
 3. A level with a private HOME, so reads of the rest of the home folder are blocked too (R9).
+
+## CI verification (2026-11-24, branch `prepare-0.2`)
+
+The `CI` workflow (full build: fmt, clippy `-D warnings`, type-check, tests, installers, install and launch checks) was run on the branch for all systems.
+
+- Run 45403394508: macOS Apple Silicon and Intel passed. Linux failed clippy (`unused_mut` in `ollama_binary`, Linux-only). Windows failed two tests: a database test deleted its folder while the file was still open (Windows forbids it), and an empty `NEXUS_REQUIRE_SANDBOX` was treated as "required".
+- Run 45406218106 (fixes in `74da8de`): macOS ×2 and Windows passed. Linux: bubblewrap ran and all other sandbox tests passed, but a write into the hidden NEXUS data folder succeeded — into bubblewrap's empty tmpfs layer, not the real folder. Fixed in `c8cfee3` by remounting hidden layers read-only, so such writes fail, as on macOS.
+- Run 45409321258 (Linux only, `c8cfee3`): passed, including the bubblewrap isolation tests (required via `NEXUS_REQUIRE_SANDBOX`).
+
+The Windows and macOS jobs ran on `74da8de`; `c8cfee3` changes only the bubblewrap arguments and a pure unit test of them, which passes locally on macOS.

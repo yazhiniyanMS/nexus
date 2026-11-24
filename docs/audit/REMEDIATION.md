@@ -104,3 +104,7 @@ Nothing has been committed.
   - **Linux:** the bubblewrap backend has never run. Its tests are written and CI is set to fail if they skip, but its behaviour (mount order, `--unshare-net` loopback, hiding `$XDG_RUNTIME_DIR`, `RLIMIT_AS`) is unverified.
   - **Windows:** compiled and linted locally, never run. The cross-platform time-limit test (`ping` under `cmd`) has not run there.
 - **Agent approval note:** the same component as on task cards, but it was not seen with a live model, because no model was connected for the UI check.
+
+## CI results (added after pushing `prepare-0.2`)
+
+Linux (with bubblewrap, sandbox tests required), Windows, macOS Apple Silicon and macOS Intel all pass the full CI build — tests, clippy, installers, install and launch checks. CI found three platform-only problems that local checks could not; they are fixed and recorded in [AUDIT_LOG.md](AUDIT_LOG.md#ci-verification-2026-11-24-branch-prepare-02). The pull-request workflow's dependency-audit and macOS execution jobs run only on pull requests and have not run yet.
