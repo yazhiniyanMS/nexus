@@ -259,7 +259,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;colo
 .pill{display:inline-block;border-radius:999px;padding:0 8px;font-size:11.5px;border:1px solid var(--line);color:var(--dim)}.high{color:var(--danger);border-color:currentColor}.medium{color:var(--warn);border-color:currentColor}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:28px}@media(max-width:760px){.cols{grid-template-columns:1fr}}
 .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:10px 14px;color:var(--dim);font-size:13px;margin-top:20px}
-footer{margin-top:48px;color:var(--faint);font-size:12px}
+footer{margin-top:48px;color:var(--faint);font-size:12px}footer a{color:inherit}
 "#;
 
 const PALETTE: &[&str] = &["#0f7b5f", "#3b6fd8", "#c2410c", "#7c3aed", "#b45309", "#0e7490", "#be185d", "#4d7c0f"];
@@ -461,7 +461,7 @@ pub fn render(d: &ReportInput) -> String {
 
     let _ = write!(
         o,
-        "<div class=\"note\">This report lists file paths, module and package names and counts. It contains no source code. It was generated locally by NEXUS {} from its own analysis and code index, without AI and without network access.</div><footer>Generated {} · NEXUS {} · open-source developer workspace</footer></main></body></html>",
+        "<div class=\"note\">This report lists file paths, module and package names and counts. It contains no source code. It was generated locally by NEXUS {} from its own analysis and code index, without AI and without network access.</div><footer>Generated {} · NEXUS {} · <a href=\"https://github.com/yazhiniyanMS/nexus\">open-source developer workspace</a></footer></main></body></html>",
         esc(d.version),
         esc(d.generated_at),
         esc(d.version)

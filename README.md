@@ -32,7 +32,7 @@ and lets AI agents propose changes in an isolated copy that reach your files onl
 Most AI coding tools start with the agent. NEXUS starts with **understanding**, and puts every change behind your approval.
 
 - **See the shape of a codebase in seconds, with no AI and no API key.** Modules and the imports between them, dependency cycles, the most-imported files, symbols and references, search across all your projects.
-- **Share it without sharing the code.** One click makes a self-contained HTML report — architecture graph, hotspots, dependencies, findings — with file paths and names but no source code. [See a real one](docs/assets/demo/nexus-report.html) (download it and open it in a browser).
+- **Share it without sharing the code.** One click makes a self-contained HTML report — architecture graph, hotspots, dependencies, findings — with file paths and names but no source code. [See a real one](docs/assets/demo/nexus-report.html) (download it and open it in a browser). The map also copies as a Mermaid diagram that GitHub renders in READMEs and issues, and Model Lab results copy as a Markdown table — names and numbers, never code or prompts.
 - **Agents that ask first.** An agent researches, plans, writes in a separate Git worktree, runs tests and reviews its own diff. You approve the plan, each command and the final diff; nothing touches your files before that. Commands can run sandboxed, and credentials in the files an agent edits are sent to the model as placeholders.
 - **Your models, measured on your hardware.** Use Ollama, llama.cpp, LM Studio or any OpenAI-compatible server locally, or Anthropic and OpenAI. Model Lab benchmarks them side by side on your machine.
 - **A real workspace around it.** Git status, diffs, staging and commits; your own shell in tabs and splits; approval-gated task lists.
@@ -60,7 +60,7 @@ Download the installer for your system from [Releases](https://github.com/yazhin
 
 The beta installers are **not code-signed**. On macOS, open NEXUS once (macOS blocks it), then go to **System Settings → Privacy & Security**, click **Open Anyway** and confirm — right-click → Open no longer works since macOS 15; on Windows choose **More info → Run anyway**. Step-by-step instructions, requirements and uninstalling: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-> The current download is **0.1.0**. The codebase report, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can build it from source (Node 24, Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)):
+> The current download is **0.1.0**. The codebase report, map and benchmark sharing, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can build it from source (Node 24, Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)):
 >
 > ```bash
 > git clone https://github.com/yazhiniyanMS/nexus.git && cd nexus

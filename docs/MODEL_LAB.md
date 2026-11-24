@@ -102,6 +102,8 @@ Pick up to four models. The page shows:
 - **Measured performance** from one saved benchmark, so all figures share the same prompts, settings and machine. A model is marked *best* in a row only when its whole range of runs beats every other model's range; overlapping ranges are treated as variation. There is no combined score and output quality is not rated.
 - **Same prompt, side by side:** runs one prompt against each model in turn, with your default settings.
 
+To share measured results, **Copy table** (or **Save…**) gives a Markdown table of the selected models' measurements with the machine, settings and date. It leaves out the benchmark's name, its prompts and the address of any remote server. It describes speed on your machine only; say so when you post it.
+
 ## Providers and defaults
 
 **Connections:** add, edit, **Test** (shows what answered and how fast), **Disable** (kept, never contacted) and remove. API keys go to the operating system's keychain; the database only records that a key exists. Keys are sent only to their own connection and are removed from error messages.
