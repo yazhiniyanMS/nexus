@@ -29,7 +29,7 @@ The value must match the line for that file in `SHA256SUMS.txt`.
 ## macOS
 
 1. Open the `.dmg` (`aarch64` for Apple Silicon, `x64` for Intel) and drag **NEXUS** to **Applications**.
-2. First launch: right-click NEXUS, choose **Open**, then **Open** again. On recent macOS versions you may instead need System Settings → Privacy & Security → **Open Anyway**. This is needed once, because the beta is unsigned.
+2. First launch: open NEXUS; macOS blocks it because the beta is unsigned. Go to **System Settings → Privacy & Security**, scroll to Security, click **Open Anyway**, then **Open**, and enter your password. Needed once. (Since macOS 15, right-click → Open no longer bypasses this; on macOS 14 and earlier it still works.)
 
 More in [MACOS.md](MACOS.md).
 
