@@ -14,6 +14,12 @@ pub const MAX_FILE_BYTES: usize = 400_000;
 /// Points Git's hook lookup at a folder that cannot exist, so no hook runs.
 const NO_HOOKS: &str = if cfg!(windows) { "core.hooksPath=NUL" } else { "core.hooksPath=/dev/null" };
 
+/// Git's worktree bookkeeping (`.git/worktrees/`) is not safe for concurrent changes: a
+/// `worktree prune` while another run is still inside `worktree add` deletes its half-made entry
+/// ("failed to read …/commondir"). Agents run in parallel, so every add, remove and prune is
+/// serialised here.
+static WORKTREES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Create a detached worktree of the project's HEAD at `dest`. Returns the base commit.
 pub fn create(project: &Path, dest: &Path) -> Result<String> {
     if git(project, &["rev-parse", "--is-inside-work-tree"]).map(|s| s.trim() != "true").unwrap_or(true) {
@@ -29,12 +35,14 @@ pub fn create(project: &Path, dest: &Path) -> Result<String> {
     // Git cannot use Windows verbatim paths (\\?\C:\...), so it is given the plain spelling.
     // Creating a workspace is NEXUS's own bookkeeping, not something the user ran, so the
     // repository's hooks (post-checkout, for example) are not run for it.
+    let _guard = WORKTREES.lock().unwrap_or_else(|e| e.into_inner());
     git(project, &["-c", NO_HOOKS, "worktree", "add", "--detach", &crate::platform::paths::display(dest), &base])?;
     Ok(base)
 }
 
 /// Remove a workspace. Safe to call when it no longer exists.
 pub fn remove(project: &Path, dest: &Path) {
+    let _guard = WORKTREES.lock().unwrap_or_else(|e| e.into_inner());
     if dest.exists() && git(project, &["worktree", "remove", "--force", &crate::platform::paths::display(dest)]).is_err() {
         let _ = fs::remove_dir_all(dest);
     }
