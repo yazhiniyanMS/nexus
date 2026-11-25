@@ -9,6 +9,7 @@ Prepared, not published. Nothing in this folder has been posted anywhere.
 | [BLOG_MAPPING_WITHOUT_AI.md](BLOG_MAPPING_WITHOUT_AI.md) | Second technical post: how the map is built without AI, and where line-based indexing is wrong |
 | [TECHNICAL_ARTICLE.md](TECHNICAL_ARTICLE.md) | An engineering write-up: IPC boundary, worktrees, sandboxing, process trees, a deadlock, credential placeholders, the report |
 | [DEMO_SCRIPT.md](DEMO_SCRIPT.md) | 90- and 60-second video scripts, and the assets already captured |
+| [LAUNCH_DAY.md](LAUNCH_DAY.md) | **Launch day 0.2.0**: final Show HN, Reddit, X posts with live links, and the order for the day |
 | [producthunt/LISTING.md](producthunt/LISTING.md) | Product Hunt fields ready to paste, gallery images (1270×760) and thumbnail, launch-date recommendation |
 | [CHANNELS.md](CHANNELS.md) | Each channel: why NEXUS belongs there, format, rules, timing |
 | [MORE_DRAFTS.md](MORE_DRAFTS.md) | Product Hunt, LinkedIn, a short introduction, Dev.to |
