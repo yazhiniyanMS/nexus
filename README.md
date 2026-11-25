@@ -23,7 +23,7 @@ and lets AI agents propose changes in an isolated copy that reach your files onl
 </p>
 
 <p align="center"><img src="docs/assets/demo/nexus-tour.gif" alt="A tour of NEXUS: welcome, project overview, architecture map, codebase report, Git diff, a task waiting for approval, execution settings and agents" width="900"></p>
-<p align="center"><sub>Real screenshots of NEXUS analysing its own repository.</sub></p>
+<p align="center"><sub>Real screenshots of NEXUS analysing its own repository. <b><a href="https://yazhiniyanms.github.io/nexus/#demo">Watch the 50-second screen recording</a></b>.</sub></p>
 
 ---
 
@@ -49,7 +49,7 @@ NEXUS is **not an editor**. Keep writing code in VS Code, Zed or your IDE; use N
 
 ## Install
 
-Download the installer for your system from [Releases](https://github.com/yazhiniyanMS/nexus/releases). Each release has `SHA256SUMS.txt` to check the download against.
+**[Download NEXUS 0.2.0 for Mac (Apple Silicon)](https://github.com/yazhiniyanMS/nexus/releases/latest/download/NEXUS_0.2.0_aarch64.dmg)** · [all downloads](https://github.com/yazhiniyanMS/nexus/releases/latest). Each release has `SHA256SUMS.txt` to check the download against.
 
 | System | File | Status |
 | --- | --- | --- |
@@ -60,13 +60,6 @@ Download the installer for your system from [Releases](https://github.com/yazhin
 
 The beta installers are **not code-signed**. On macOS, open NEXUS once (macOS blocks it), then go to **System Settings → Privacy & Security**, click **Open Anyway** and confirm — right-click → Open no longer works since macOS 15; on Windows choose **More info → Run anyway**. Step-by-step instructions, requirements and uninstalling: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-> The current download is **0.1.0**. The codebase report, map and benchmark sharing, the guided first run, sandboxed execution levels, time limits and the redesigned interface described here are in `main` and will ship in **0.2.0**. Until then you can build it from source (Node 24, Rust and the [Tauri prerequisites](https://tauri.app/start/prerequisites/)):
->
-> ```bash
-> git clone https://github.com/yazhiniyanMS/nexus.git && cd nexus
-> npm install
-> npm run tauri dev
-> ```
 
 ## Try it in five minutes
 
@@ -96,7 +89,7 @@ API keys are kept in the macOS Keychain, Windows Credential Manager or the Linux
 | --- | --- | --- |
 | Projects, analysis, findings | Available | Languages, frameworks, dependencies (npm, Cargo, pip, Go), possible secrets, large files, missing tests/README/CI |
 | Intelligence: map, symbols, references, docs | Available | Rust, TypeScript, JavaScript, Python, Go. Line-based extraction, not a full parser |
-| Codebase report | Available (next release) | HTML, no source code |
+| Codebase report | Available | HTML, no source code; the map also copies as Mermaid |
 | Ask about the code | Available, needs a model | Answers cite the files and lines they used |
 | Search | Available | Text or regex across every project, respects `.gitignore` |
 | Git | Available | Status, diffs, history, branches, stage, unstage, commit. No push, pull or branch switching |
@@ -132,7 +125,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Roadmap
 
-Next: ship 0.2.0 with the report, guided setup and sandboxing; verify Windows and Linux hands-on; signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
+Now: 0.2.0 is out; next, hands-on checks on Windows and Linux, fixes from the first users, and signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Feedback
 

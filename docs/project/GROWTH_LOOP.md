@@ -9,7 +9,7 @@ People find tools through what other people share. NEXUS's sharing is designed s
 3. **No tracking in shared artifacts.** No pixels, no tracked links, no IDs. The only addition is a plain link to the repository, so a reader can find where it came from.
 4. **Say what it is.** Each share says how it was made and what it doesn't cover (a benchmark is speed on one machine, not quality).
 
-## Built (the report, map and benchmark sharing ship in the next release)
+## Built (in 0.2.0)
 
 | What | Where | What it contains | What it never contains | Verified by |
 | --- | --- | --- | --- | --- |
