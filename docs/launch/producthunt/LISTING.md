@@ -1,10 +1,14 @@
-# Product Hunt listing — ready to paste
+# Product Hunt listing
 
-Prepared 25 November 2026. **Not entered into Product Hunt yet:** no Product Hunt connection was available, and the browser was not signed in to Product Hunt. Paste each field into the existing "nexus" draft and save it as a draft. Nothing here is scheduled or published.
+**Status (25 November 2026): saved in the Product Hunt draft "NEXUS"** (private draft, revision 3, Product Hunt reports no blockers). Not submitted, no launch date set, nothing published. Edit it at https://www.producthunt.com/posts/new/Z5EMN25M24UVCME73JDRRWDFSMFQ2IU3Y3
+
+Saved in the draft: name, the recommended tagline ("Map any codebase locally. AI changes only with your approval"), the description (496 characters; the form allows 500), website and download links (the main link is the GitHub repository, which the form doesn't let tools change), open source, free, you as solo maker, launch tags (Developer Tools, Open Source, Artificial Intelligence), categories (AI Coding Agents, LLM Developer Tools), the first comment (without the Mermaid sentence, which isn't on `main` yet), the thumbnail and the 7 gallery images below in order.
+
+Left empty on purpose: launch date, video, funding and investor questions, shoutouts, team size, promo code, hunter.
 
 Every claim below is something NEXUS does in the code (verified in the code, tests or the running app). **One exception to check:** copying the map as Mermaid, the benchmark table and the report's footer link are in three commits on `prepare-0.2` that are not on `main` yet (PR #2 was merged before them). If 0.2.0 ships without them, delete the Mermaid sentence from the first comment. **Launch only after 0.2.0 is released**: the current download (0.1.0) lacks the codebase report, the sharing features and sandboxed execution levels.
 
-Field limits used: tagline ≤ 60 characters; description ≤ 260 characters (Product Hunt's help pages and guides disagree between 260 and 500, so this fits both); up to 3 launch tags; gallery 1270×760; thumbnail 240×240; files under 3 MB.
+Field limits (from Product Hunt's composer): name ≤ 40, tagline ≤ 60, description 6–500 characters; up to 3 launch tags and 3 categories; gallery 1270×760; thumbnail 240×240.
 
 ## Basics
 
@@ -80,14 +84,12 @@ All are real screenshots of NEXUS analysing its own repository (`docs/assets/scr
 
 ## Launch date (recommendation — not scheduled)
 
-I could not see the dates the form offers, because Product Hunt wasn't accessible. Recommendation:
+The form currently offers **25 November – 26 December 2026** (00:00 Pacific; 2 launches per account per day). 8, 9 and 12 December were checked and available.
 
-**Tuesday 12 January 2027** (fallback: Wednesday 13 January). Product Hunt's day starts at 12:01 a.m. Pacific, which is **1:31 p.m. India Standard Time** on the same date in January. Be awake and replying for the first 6–8 hours, until about 9:30 p.m. IST.
+- **If 0.2.0 is released by about 1 December:** **Tuesday 8 December 2026** (fallback Wednesday 9 December). Product Hunt's day starts at 12:01 a.m. Pacific = **1:31 p.m. India Standard Time** on 8 December. Be present for the first 6–8 hours.
+- **If 0.2.0 isn't out by then:** don't launch in December. The window moves forward over time; aim for **Tuesday 12 January 2027** once it becomes selectable, after a few weeks of real use ([CONTENT_CALENDAR.md](../CONTENT_CALENDAR.md)).
+- Avoid US Thanksgiving week (26 November) and 21 December – 4 January, when much of the audience is away.
+- A weekend (for example Saturday 12 December) has less traffic and less competition — often better for an open-source tool whose aim is feedback.
+- **Unsigned installers** will show macOS and Windows warnings to Product Hunt visitors; the first comment says so. Link the [installation guide](../../INSTALLATION.md) in your first reply.
 
-Why then:
-- **0.2.0 has to be out first**, plus a few weeks of real use ([CONTENT_CALENDAR.md](../CONTENT_CALENDAR.md) week 1–3), so installation problems are found by friends, not by Product Hunt visitors.
-- **Avoid** US Thanksgiving week (26 November 2026) and 21 December – 4 January, when much of the audience is away.
-- Tuesday to Thursday has the most visitors and the most competition. A **weekend** (for example Saturday 16 January 2027) has less of both, often better for a small open-source tool whose aim is feedback rather than a ranking. Either is fine; pick a day you can be present.
-- **Unsigned installers** will show macOS and Windows warnings to Product Hunt visitors. If signing isn't possible by then, keep the first-comment line about it, and link the [installation guide](../../INSTALLATION.md) in your first reply.
-
-When you have chosen, schedule it yourself in the Product Hunt form — nothing has been scheduled.
+Set the date yourself in the editor when you decide. Nothing has been scheduled.
