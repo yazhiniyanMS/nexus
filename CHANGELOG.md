@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased (planned 0.2.0)
+## 0.2.0 — public beta (2026-11-25)
 
 ### Added
+- **Sharing without the code**: copy the architecture map as a Mermaid diagram (GitHub draws it in READMEs and issues); copy or save Model Lab benchmark results as a Markdown table (no prompts or server addresses); the report's footer links to the project.
+- The map opens at the folder depth (one to three levels) that shows the most dependencies.
+- Website with real screenshots and a screen recording; issue forms for platform reports and confusing screens.
 - **Codebase report**: one self-contained HTML file with the module graph, cycles, hotspots, entry points, dependencies, findings and Git facts — and no source code. Overview → Share a report, or Intelligence → Docs.
 - **Guided first run**: add and index a project, connect (or start) a local Ollama, then next steps. Every step can be skipped.
 - **Execution levels** for approved commands — Trusted, Restricted (sandboxed) and Isolated (no network) — using the macOS sandbox or bubblewrap on Linux; refused rather than downgraded where unavailable. Settings → Execution.
@@ -23,6 +26,12 @@
 - A possible freeze when a task step started waiting for approval.
 - Path traversal in the untracked-file preview; agent workspaces left behind when a project was removed; commands running in the wrong folder when a project folder was gone.
 - Commands writing `>/dev/null` were flagged as destructive.
+- Installation instructions for macOS 15 and later: right-click → Open no longer bypasses Gatekeeper; use Privacy & Security → Open Anyway.
+
+### Known issues
+- Installers are unsigned; no automatic updates.
+- Windows has no sandbox backend (Trusted only); Windows and Linux have had little hands-on use.
+- The index understands five languages with line-based rules.
 
 See [docs/audit/](docs/audit/) for the full security and reliability record.
 

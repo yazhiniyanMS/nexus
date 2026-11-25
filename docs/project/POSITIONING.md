@@ -64,7 +64,7 @@ Not differentiators (do not claim them): "local-first AI desktop app" (OpenCode 
 
 | Blocker | Severity | Status |
 | --- | --- | --- |
-| Released 0.1.0 lacks the report, guided setup, sandboxing and the new interface | High | In `main`, CI green on macOS, Windows and Linux; needs the 0.2.0 release |
+| Released 0.1.0 lacks the report, guided setup, sandboxing and the new interface | High | **Fixed:** 0.2.0 released 25 Nov 2026 |
 | Unsigned installers (Gatekeeper and SmartScreen warnings) | High | Needs certificates (paid). Workaround docs corrected for macOS 15+, where right-click → Open no longer works |
 | No website live | Medium | **Fixed 24 Nov 2026**: live at https://yazhiniyanms.github.io/nexus/ |
 | Repository has no topics, homepage or social preview; generic description | Medium | Prepared in [GITHUB_SETUP.md](../launch/GITHUB_SETUP.md); needs the owner to apply |

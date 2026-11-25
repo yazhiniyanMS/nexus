@@ -46,3 +46,9 @@ dist-release/
 .idea/
 .vscode/
 Thumbs.db
+
+# Personal Claude Code settings (not shared)
+.claude/settings.local.json
+
+# Large local launch files (the full-size video ships as a release asset)
+launch-assets/

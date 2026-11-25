@@ -36,20 +36,20 @@
   <h1>Understand a codebase on your own machine. Change it <span class="hl">only through you.</span></h1>
   <p class="lead">NEXUS is a desktop app that maps any local project without AI — its modules, dependency cycles and hotspots — and lets AI agents propose changes in an isolated copy that reach your files only after you approve the diff.</p>
   <div class="row">
-    <a class="btn primary" href="{{RELEASES_URL}}">Download for macOS, Windows or Linux</a>
+    <a class="btn primary" href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_aarch64.dmg">Download for Mac (Apple Silicon)</a>
+    <a class="btn" href="#start">Windows, Linux and Intel Mac</a>
     <a class="btn" href="{{REPO_URL}}">View on GitHub</a>
   </div>
-  <p class="note">No account, no telemetry, no AI key needed. Works with Ollama and other local models.</p>
-  <p class="note notice">The current download is <b>{{VERSION}}</b>. The codebase report, guided setup, sandboxed execution and the interface shown here are in the source and ship in the next release; you can <a href="{{REPO_URL}}/blob/main/docs/CONTRIBUTING.md">build it from source</a> today.</p>
+  <p class="note">Version {{VERSION}} · free and open source (MIT) · no account, no telemetry, no AI key needed. Works with Ollama and other local models.</p>
   <figure class="hero-shot"><img src="assets/screenshots/architecture-map.png" alt="NEXUS showing the architecture map of a project: modules as circles, imports as arrows, dependency cycles outlined in red" width="2000" height="1272">
   <figcaption>The architecture map of NEXUS's own repository, built from a local code index. Every image on this page is the real application.</figcaption></figure>
 </div>
 
 <section id="demo" aria-labelledby="demo-h"><div class="wrap">
-  <h2 id="demo-h">A quick tour</h2>
-  <p class="sub">Welcome → a project overview → the architecture map → the codebase report → a Git diff → a task waiting for approval → execution settings → agents.</p>
-  <figure><img src="assets/demo/nexus-tour.gif" alt="A looping tour of real NEXUS screenshots" width="1000" height="636" loading="lazy">
-  <figcaption>A sequence of real screenshots, not a screen recording.</figcaption></figure>
+  <h2 id="demo-h">See it in 50 seconds</h2>
+  <p class="sub">Open a project → the architecture map → symbol search → a report with no source code → a command waiting for approval, run in the macOS sandbox → review a diff and commit → execution levels.</p>
+  <figure><video controls playsinline preload="none" poster="assets/demo/nexus-demo-poster.jpg" width="1280" height="720" style="width:100%;height:auto;border-radius:12px"><source src="assets/demo/nexus-demo.mp4" type="video/mp4">Your browser cannot play this video. <a href="assets/demo/nexus-demo.mp4">Download it</a>.</video>
+  <figcaption>A real screen recording of NEXUS {{VERSION}} on macOS, with a copy of its own repository. No AI model was used: everything shown works without one.</figcaption></figure>
 </div></section>
 
 <section id="features" aria-labelledby="features-h"><div class="wrap">
@@ -131,10 +131,10 @@
   <table class="platforms">
     <thead><tr><th scope="col">System</th><th scope="col">Download</th><th scope="col">Status</th></tr></thead>
     <tbody>
-      <tr><td>macOS, Apple Silicon</td><td class="dim"><code>.dmg</code> (aarch64)</td><td class="dim">Used daily</td></tr>
-      <tr><td>macOS, Intel</td><td class="dim"><code>.dmg</code> (x64)</td><td class="dim">Built and launch-checked under Rosetta</td></tr>
-      <tr><td>Windows 10/11 x64</td><td class="dim"><code>-setup.exe</code> or <code>.msi</code></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
-      <tr><td>Linux x64</td><td class="dim"><code>.deb</code>, <code>.rpm</code>, <code>.AppImage</code></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
+      <tr><td>macOS, Apple Silicon</td><td class="dim"><a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_aarch64.dmg"><code>.dmg</code></a> (aarch64)</td><td class="dim">Used daily</td></tr>
+      <tr><td>macOS, Intel</td><td class="dim"><a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_x64.dmg"><code>.dmg</code></a> (x64)</td><td class="dim">Built and launch-checked under Rosetta</td></tr>
+      <tr><td>Windows 10/11 x64</td><td class="dim"><a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_x64-setup.exe"><code>-setup.exe</code></a> or <a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_x64_en-US.msi"><code>.msi</code></a></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
+      <tr><td>Linux x64</td><td class="dim"><a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_amd64.deb"><code>.deb</code></a>, <a href="{{REPO_URL}}/releases/latest/download/NEXUS-{{VERSION}}-1.x86_64.rpm"><code>.rpm</code></a>, <a href="{{REPO_URL}}/releases/latest/download/NEXUS_{{VERSION}}_amd64.AppImage"><code>.AppImage</code></a></td><td class="dim">Built, installed and launch-checked in CI; little hands-on use</td></tr>
     </tbody>
   </table>
   <p class="note" style="margin-top:12px">Step-by-step: <a href="{{REPO_URL}}/blob/main/docs/GETTING_STARTED.md">getting started</a> · <a href="{{REPO_URL}}/blob/main/docs/INSTALLATION.md">installation</a> · <a href="{{REPO_URL}}/blob/main/docs/TROUBLESHOOTING.md">troubleshooting</a></p>
@@ -163,7 +163,7 @@
 <section id="roadmap" aria-labelledby="rm-h"><div class="wrap">
   <h2 id="rm-h">Roadmap</h2>
   <div class="grid">
-    <div class="card"><h3>Now</h3><p>Release 0.2.0: the codebase report, guided first run, sandboxed execution levels and the new interface, verified on every system.</p></div>
+    <div class="card"><h3>Now</h3><p>0.2.0 is out. Next up: hands-on checks on Windows and Linux, and fixing what the first users report.</p></div>
     <div class="card"><h3>Next</h3><p>A Windows sandbox backend, signed installers, incremental indexing, better agents with local models, comparing two reports.</p></div>
     <div class="card"><h3>Not planned</h3><p>An editor, accounts, telemetry, or a bundled hosted model.</p></div>
   </div>

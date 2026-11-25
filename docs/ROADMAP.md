@@ -2,9 +2,8 @@
 
 Ordered by value to people using NEXUS, not by how interesting a feature is to build. Dates are not promised; this is a one-person project.
 
-## Now — 0.2.0
+## Released — 0.2.0 (25 November 2026)
 
-The work is done in `main`; it needs a verified release.
 
 - [x] Codebase report: a shareable HTML file with no source code
 - [x] Guided first run: add a project, index it, connect a local model, next steps
@@ -12,8 +11,13 @@ The work is done in `main`; it needs a verified release.
 - [x] Credentials sent to models as placeholders in agent edits; masked in questions
 - [x] Commit from the Git screen; merge and conflict state
 - [x] Redesigned interface; Settings screen
-- [ ] CI green on Windows and Linux for all of the above, then tag 0.2.0
-- [ ] Hands-on check of the 0.2.0 installers on Windows and Linux
+- [x] Map and benchmark sharing (Mermaid, Markdown table)
+- [x] CI green on macOS, Windows and Linux; tagged and released
+
+## Now
+
+- [ ] Hands-on check of the 0.2.0 installers on Windows and Linux (platform reports welcome)
+- [ ] Fix what the first users report
 
 ## Next
 
