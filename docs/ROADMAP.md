@@ -2,7 +2,7 @@
 
 Ordered by value to people using NEXUS, not by how interesting a feature is to build. Dates are not promised; this is a one-person project.
 
-## Released — 0.2.0 (25 November 2026)
+## Released — 0.2.1 (25 November 2026)
 
 
 - [x] Codebase report: a shareable HTML file with no source code
@@ -16,7 +16,7 @@ Ordered by value to people using NEXUS, not by how interesting a feature is to b
 
 ## Now
 
-- [ ] Hands-on check of the 0.2.0 installers on Windows and Linux (platform reports welcome)
+- [ ] Hands-on check of the 0.2.1 installers on Windows and Linux (platform reports welcome)
 - [ ] Fix what the first users report
 
 ## Next

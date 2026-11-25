@@ -1,11 +1,11 @@
-# Launch day — 25 November 2026 (NEXUS 0.2.0)
+# Launch day — 25 November 2026 (NEXUS 0.2.1)
 
 Final posts with live links. Post each one yourself, from your own accounts. No vote requests, no cross-posting the same text on the same day, reply to every comment.
 
 **Links**
 - Repository: https://github.com/yazhiniyanMS/nexus
-- Release: https://github.com/yazhiniyanMS/nexus/releases/tag/v0.2.0
-- Mac (Apple Silicon) download: https://github.com/yazhiniyanMS/nexus/releases/latest/download/NEXUS_0.2.0_aarch64.dmg
+- Release: https://github.com/yazhiniyanMS/nexus/releases/tag/v0.2.1
+- Mac (Apple Silicon) download: https://github.com/yazhiniyanMS/nexus/releases/latest/download/NEXUS_0.2.1_aarch64.dmg
 - Website and 50-second recording: https://yazhiniyanms.github.io/nexus/#demo
 
 ## Order for today (times IST)
@@ -49,7 +49,7 @@ Subreddit rules could **not** be read automatically today (reddit.com blocks aut
 >
 > Honest limits: small models (~7B) often fail to produce valid plans; 14B+ works better. [Add a table of your own Model Lab results here — Compare → Copy table — before posting.]
 >
-> 0.2.0 is out today: https://github.com/yazhiniyanMS/nexus — which models work for you?
+> 0.2.1 is out today: https://github.com/yazhiniyanMS/nexus — which models work for you?
 
 ### r/rust
 
@@ -59,14 +59,14 @@ Subreddit rules could **not** be read automatically today (reddit.com blocks aut
 
 ### r/opensource
 
-> NEXUS 0.2.0 is out: an MIT-licensed desktop app for understanding codebases locally (architecture map, cycles, a shareable report with no code) and running AI changes as approval-gated proposals. It's a one-person beta and I'm looking for people to try it on Windows and Linux, and for contributors — there are four good first issues, from a TypeScript-only one to Java support in the indexer: https://github.com/yazhiniyanMS/nexus/labels/good%20first%20issue
+> NEXUS 0.2.1 is out: an MIT-licensed desktop app for understanding codebases locally (architecture map, cycles, a shareable report with no code) and running AI changes as approval-gated proposals. It's a one-person beta and I'm looking for people to try it on Windows and Linux, and for contributors — there are four good first issues, from a TypeScript-only one to Java support in the indexer: https://github.com/yazhiniyanMS/nexus/labels/good%20first%20issue
 
 ## X
 
 X isn't connected to the Typefully account, so paste these.
 
 1. **Launch** (attach the demo video `launch-assets/nexus-demo-1080p.mp4` or the 720p `docs/assets/demo/nexus-demo.mp4`):
-   > NEXUS 0.2.0 is out — an open-source desktop app that maps any codebase on your machine (modules, dependency cycles, hotspots) with no AI and no account. AI agents are optional and need your approval for the plan, every command and the diff. macOS, Windows, Linux. MIT.
+   > NEXUS 0.2.1 is out — an open-source desktop app that maps any codebase on your machine (modules, dependency cycles, hotspots) with no AI and no account. AI agents are optional and need your approval for the plan, every command and the diff. macOS, Windows, Linux. MIT.
    > https://github.com/yazhiniyanMS/nexus
 
 2. **Demo** (attach the map poster `launch-assets/nexus-demo-poster-map.png`):
@@ -76,7 +76,7 @@ X isn't connected to the Typefully account, so paste these.
    > A bubblewrap lesson from building NEXUS: mounting a tmpfs over a folder to hide it doesn't stop writes — they land in a throwaway layer and your test still "passes". `--tmpfs dir --remount-ro dir` makes the write fail, which is what you want. Sandboxing write-up in the repo.
 
 4. **Follow-up (tomorrow)**:
-   > Day one of NEXUS 0.2.0: thanks to everyone who tried it. The most useful thing you can send me now is a platform report from Windows or Linux — there's a form that asks exactly the right questions: https://github.com/yazhiniyanMS/nexus/issues/new?template=platform_report.yml
+   > Day one of NEXUS 0.2.1: thanks to everyone who tried it. The most useful thing you can send me now is a platform report from Windows or Linux — there's a form that asks exactly the right questions: https://github.com/yazhiniyanMS/nexus/issues/new?template=platform_report.yml
 
 ## Product Hunt
 

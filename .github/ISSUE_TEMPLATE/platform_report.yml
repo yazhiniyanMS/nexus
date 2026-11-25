@@ -18,7 +18,7 @@ body:
     id: version
     attributes:
       label: System version and NEXUS version
-      placeholder: "Ubuntu 24.04, NEXUS 0.2.0 (.deb)"
+      placeholder: "Ubuntu 24.04, NEXUS 0.2.1 (.deb)"
     validations:
       required: true
   - type: checkboxes

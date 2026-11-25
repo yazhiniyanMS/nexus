@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.2.0 — public beta (2026-11-25)
+## 0.2.1 — public beta (2026-11-25)
+
+First public release of the 0.2 line. The `v0.2.0` tag was never released: its macOS build stopped on the agent worktree race fixed below.
 
 ### Added
 - **Sharing without the code**: copy the architecture map as a Mermaid diagram (GitHub draws it in READMEs and issues); copy or save Model Lab benchmark results as a Markdown table (no prompts or server addresses); the report's footer links to the project.

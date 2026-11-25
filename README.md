@@ -49,7 +49,7 @@ NEXUS is **not an editor**. Keep writing code in VS Code, Zed or your IDE; use N
 
 ## Install
 
-**[Download NEXUS 0.2.0 for Mac (Apple Silicon)](https://github.com/yazhiniyanMS/nexus/releases/latest/download/NEXUS_0.2.0_aarch64.dmg)** · [all downloads](https://github.com/yazhiniyanMS/nexus/releases/latest). Each release has `SHA256SUMS.txt` to check the download against.
+**[Download NEXUS 0.2.1 for Mac (Apple Silicon)](https://github.com/yazhiniyanMS/nexus/releases/latest/download/NEXUS_0.2.1_aarch64.dmg)** · [all downloads](https://github.com/yazhiniyanMS/nexus/releases/latest). Each release has `SHA256SUMS.txt` to check the download against.
 
 | System | File | Status |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Roadmap
 
-Now: 0.2.0 is out; next, hands-on checks on Windows and Linux, fixes from the first users, and signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
+Now: 0.2.1 is out; next, hands-on checks on Windows and Linux, fixes from the first users, and signed installers. Later: a Windows sandbox backend, incremental indexing, more languages in the index. The full list, and what is deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Feedback
 
