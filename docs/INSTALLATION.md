@@ -16,12 +16,12 @@ NEXUS is in public beta. Installers are attached to each release on GitHub toget
 ## Checking your download
 
 ```bash
-shasum -a 256 NEXUS_0.2.0_aarch64.dmg        # macOS
-sha256sum NEXUS_0.2.0_amd64.deb              # Linux
+shasum -a 256 NEXUS_0.2.1_aarch64.dmg        # macOS
+sha256sum NEXUS_0.2.1_amd64.deb              # Linux
 ```
 
 ```powershell
-Get-FileHash .\NEXUS_0.2.0_x64-setup.exe -Algorithm SHA256   # Windows
+Get-FileHash .\NEXUS_0.2.1_x64-setup.exe -Algorithm SHA256   # Windows
 ```
 
 The value must match the line for that file in `SHA256SUMS.txt`.
