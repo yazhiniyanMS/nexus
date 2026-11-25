@@ -26,6 +26,7 @@
 - A possible freeze when a task step started waiting for approval.
 - Path traversal in the untracked-file preview; agent workspaces left behind when a project was removed; commands running in the wrong folder when a project folder was gone.
 - Commands writing `>/dev/null` were flagged as destructive.
+- Two agent runs starting at the same moment in one project could fail with "failed to read …/commondir": Git worktree creation and cleanup are now serialised.
 - Installation instructions for macOS 15 and later: right-click → Open no longer bypasses Gatekeeper; use Privacy & Security → Open Anyway.
 
 ### Known issues
