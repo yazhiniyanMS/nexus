@@ -2,16 +2,22 @@
 // the same prompt run against each model. No scores or rankings are computed.
 import { listen } from "@tauri-apps/api/event";
 import clsx from "clsx";
-import { GitCompareArrows, Play, Square } from "lucide-react";
+import { Copy, FileDown, GitCompareArrows, Play, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Badge, Button, Card, Empty, ErrorBanner, Select } from "../../components/ui";
 import { api, LAB_INFER, type BenchSuite, type BenchTargetSummary, type InferEvent, type Metrics, type ModelRecord, type Stat } from "../../lib/api";
 import { describeParams, fmtBytes, fmtInt, fmtMs, fmtParams, fmtStat, fmtTps, hostOf, newRequestId, normalizeParams, paramsFor, UNKNOWN } from "../../lib/lab";
+import { markdownTable } from "../../lib/share";
 import { errorText, timeAgo, useAsync } from "../../lib/util";
 import { hardwareLine } from "./Benchmarks";
 import { MetricsLine, type LabCtx, type LabTarget } from "./shared";
 
 const MAX_MODELS = 4;
+const localDate = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const WHAT = "It contains model names, this machine, settings and measurements — no prompts or server addresses.";
 
 interface SideRun { status: "waiting" | "running" | "done" | "error" | "stopped"; text: string; thinking: string; metrics?: Metrics; error?: string }
 
@@ -62,6 +68,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
   const [active, setActive] = useState<{ id: string; key: string } | null>(null);
   const [allowRemote, setAllowRemote] = useState(false);
   const [error, setError] = useState<string>();
+  const [shared, setShared] = useState<string>();
   const activeRef = useRef(active);
   const queue = useRef<string[]>([]);
   const promptRef = useRef("");
@@ -199,6 +206,31 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
   const anyMeasured = summaries.some((s) => s && s.runs > 0);
   const notIn = "not in this benchmark";
   const stat = (pick: (s: BenchTargetSummary) => ReactNode) => summaries.map((s) => (s ? (s.runs > 0 ? pick(s) : "no successful run") : suite ? notIn : UNKNOWN));
+  // What "Copy/Save as Markdown" shares: model names, the machine, settings and measurements.
+  // Never the benchmark's name, its prompts or the address of a remote server.
+  const shareText = () => {
+    if (!suite) return "";
+    const s = (pick: (x: BenchTargetSummary) => string) => summaries.map((x) => (x ? (x.runs > 0 ? pick(x) : "no successful run") : notIn));
+    return markdownTable({
+      title: "Local model benchmark",
+      context: [
+        `Machine: ${hardwareLine(suite.hardware)}`,
+        `Settings: ${describeParams(suite.config.params)} · ${suite.config.prompts.length} prompt${suite.config.prompts.length === 1 ? "" : "s"} × ${suite.config.repeats} run${suite.config.repeats === 1 ? "" : "s"}${suite.config.warmup ? " · warmed up" : ""}`,
+        `Measured ${localDate(suite.created_at)}. Median (range, runs) where several runs were made.`,
+      ],
+      columns: chosen.map((m) => `${m.model_id} (${m.local ? "local" : "remote"})`),
+      rows: [
+        { label: "First token", cells: s((x) => fmtStat(x.ttft_ms, fmtMs)) },
+        { label: "Generation speed", cells: s((x) => `${fmtStat(x.tokens_per_second, fmtTps)}${x.tps_source && x.tps_source !== "runtime" ? ` (${x.tps_source})` : ""}`) },
+        { label: "Total time", cells: s((x) => fmtStat(x.total_ms, fmtMs)) },
+        { label: "Model load", cells: s((x) => fmtMs(x.load_ms)) },
+        { label: "Memory when loaded", cells: s((x) => (x.memory_bytes ? fmtBytes(x.memory_bytes) : UNKNOWN)) },
+        { label: "Output tokens", cells: s((x) => fmtStat(x.output_tokens, (v) => fmtInt(v))) },
+        { label: "Measured runs", cells: s((x) => `${x.runs}${x.errors ? ` (${x.errors} failed)` : ""}`) },
+      ],
+      note: "Speed only, on this one machine; output quality was not measured.",
+    });
+  };
   const untested = suite ? suite.config.targets.filter((t) => !chosen.some((m) => m.provider_id === t.provider_id && m.model_id === t.model)) : [];
 
   return (
@@ -252,10 +284,30 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
             <Card className="p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold">Measured performance</h2>
-                <Select aria-label="Benchmark to use" className="ml-auto w-80!" value={suiteId} onChange={(e) => setSuiteId(e.target.value)}>
+                <Select aria-label="Benchmark to use" className="ml-auto w-64!" value={suiteId} onChange={(e) => setSuiteId(e.target.value)}>
                   <option value="">{completed.length ? "Choose a saved benchmark…" : "No saved benchmark yet"}</option>
                   {completed.map((s) => <option key={s.id} value={s.id}>{s.name} · {timeAgo(s.created_at)}</option>)}
                 </Select>
+                {suite && (
+                  <>
+                    <Button size="sm" title="Model names, this machine, settings and measurements as a Markdown table. Not the benchmark's name, prompts or server addresses." onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(shareText());
+                        setShared(`Copied as Markdown. ${WHAT}`);
+                      } catch (e) {
+                        setShared(`Could not copy: ${errorText(e)}`);
+                      }
+                    }}><Copy size={12} /> Copy table</Button>
+                    <Button size="sm" onClick={async () => {
+                      try {
+                        const path = await api.exportText("nexus-benchmark.md", shareText());
+                        if (path) setShared(`Saved. ${WHAT}`);
+                      } catch (e) {
+                        setShared(`Could not save: ${errorText(e)}`);
+                      }
+                    }}><FileDown size={12} /> Save…</Button>
+                  </>
+                )}
                 <Button size="sm" onClick={() => ctx.go("benchmarks", runnable[0] ? { providerId: runnable[0].provider_id ?? undefined, model: runnable[0].model_id } : undefined)}>Run a benchmark</Button>
               </div>
               <ErrorBanner message={suiteError ?? suites.error} />
@@ -290,6 +342,7 @@ export default function CompareTab({ ctx, target }: { ctx: LabCtx; target: LabTa
                       <Row label="Measured runs" cells={stat((s) => `${s.runs}${s.errors ? ` (${s.errors} failed)` : ""}`)} />
                     </tbody>
                   </table>
+                  {shared && <p data-testid="compare-shared" className="mt-2 text-2xs text-faint">{shared}</p>}
                   <p className="mt-2 text-2xs leading-relaxed text-faint">
                     “Best” appears only where one model's whole range of runs beats every other model's range; overlapping ranges are run-to-run variation, so no model is marked. It is not a quality rating: output quality is not measured here.
                     {!anyMeasured && " None of the selected models has a successful run in this benchmark."}

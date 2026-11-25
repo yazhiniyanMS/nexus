@@ -1,4 +1,4 @@
-# Demo video script (about 90 seconds)
+# Demo video scripts (90 and 60 seconds)
 
 Record the real app, with real projects, at 1320×840 or larger. Use a throwaway data folder so nothing personal appears:
 
@@ -22,6 +22,23 @@ Before recording: set a neutral shell prompt in any terminal you show, close not
 | 1:27 | GitHub page | "Free and open source. github.com/yazhiniyanMS/nexus" |
 
 The agent part needs a model that can produce a valid plan; a 14B+ model is more reliable than a 7B one. If a step fails on camera, keep it — and show the failure message — or re-record; never edit in a result that did not happen.
+
+## 60-second version (YouTube Shorts, X, the README)
+
+Vertical 1080×1920 for Shorts: record the window at 1320×840 and crop to the active area, or record a narrower window. Captions on screen, because most people watch muted. No model needed — everything shown works without AI.
+
+| Time | Show | Caption |
+| --- | --- | --- |
+| 0:00 | The map of a well-known public repository, cycles in red | "This is the architecture of [repository], drawn on my laptop. No AI." |
+| 0:05 | Welcome → choose the folder → index finishes | "Point NEXUS at any folder. It reads the code; it never changes it." |
+| 0:13 | Intelligence → Map; click a module, its imports highlight | "Modules, the imports between them…" |
+| 0:20 | Hover the red outline; the cycle list on the right | "…and the dependency cycles you didn't know you had." |
+| 0:27 | **Copy as Mermaid** → paste into a GitHub issue preview; the diagram renders | "Copy the map into a README or an issue. Names only, no code." |
+| 0:36 | Overview → Share a report → the HTML opens; scroll | "Or save a full report to send someone — graph, hotspots, dependencies, no source code." |
+| 0:47 | Agents → a task stopped at the plan gate (pre-recorded with a local model, if you have one) | "AI agents are optional, and they have to ask before anything changes." |
+| 0:54 | The GitHub page | "Free, open source, macOS, Windows and Linux. Link in bio." |
+
+If you don't have a model that produces a valid plan, replace 0:47 with Git: a diff and a commit ("Review and commit what changed"). Never show a result that didn't happen.
 
 ## Assets already in the repository
 

@@ -8,6 +8,7 @@ import { GraphView } from "../components/GraphView";
 import { ModelChoiceControls, ModelChoiceNotice, useModelChoice } from "../components/ModelChoice";
 import { Badge, Button, Card, Empty, ErrorBanner, Input, Select, Spinner, Tabs, ViewHeader } from "../components/ui";
 import { api, INDEX_PROGRESS, type Answer, type Provider, type Reference, type Source, type SymbolHit } from "../lib/api";
+import { mermaidFromGraph } from "../lib/share";
 import { errorText, formatNumber, timeAgo, useAsync } from "../lib/util";
 
 const CodeViewer = lazy(() => import("../components/CodeViewer"));
@@ -37,9 +38,13 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
     };
   }, [projectId]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string>();
   const [level, depth] = mode === "file" ? (["file", 1] as const) : (["module", Number(mode.split("-")[1])] as const);
   const graph = useAsync(() => api.dependencyGraph(projectId, level, depth, externals), [projectId, mode, externals]);
-  useEffect(() => setSelected(null), [projectId, mode, externals]);
+  useEffect(() => {
+    setSelected(null);
+    setCopied(undefined);
+  }, [projectId, mode, externals]);
 
   const g = graph.data;
   const node = g?.nodes.find((n) => n.id === selected);
@@ -65,6 +70,24 @@ function MapTab({ projectId, ws }: { projectId: string; ws: Workspace }) {
             <span>{g.nodes.length} nodes · {g.edges.length} dependencies</span>
             {g.cycles.length > 0 && <span className="flex items-center gap-1 text-danger"><AlertTriangle size={12} /> {g.cycles.length} cycle{g.cycles.length > 1 ? "s" : ""}</span>}
             {g.truncated && <span className="text-warn">showing the most connected nodes</span>}
+            {g.nodes.length > 0 && (
+              <Button
+                size="sm"
+                title="Copies the map as a Mermaid diagram, which GitHub shows as a picture in READMEs, issues and pull requests. It contains module names and the imports between them, no source code."
+                onClick={async () => {
+                  const title = mode === "file" ? "File dependency graph" : `Architecture map, ${depth === 1 ? "top-level modules" : `${depth} folder levels`}`;
+                  try {
+                    await navigator.clipboard.writeText(mermaidFromGraph(g, title));
+                    setCopied("Copied as Mermaid: names only, no code.");
+                  } catch (e) {
+                    setCopied(`Could not copy: ${errorText(e)}`);
+                  }
+                }}
+              >
+                <Copy size={12} /> Copy as Mermaid
+              </Button>
+            )}
+            {copied && <span data-testid="map-copied" className="text-faint">{copied}</span>}
           </span>
         )}
       </div>

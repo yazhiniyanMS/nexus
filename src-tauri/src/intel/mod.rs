@@ -771,6 +771,8 @@ mod tests {
         assert!(!html.contains("<script>") && html.contains("demo &lt;script&gt;"));
         assert!(html.contains("default-src 'none'"));
         assert!(!html.contains("http://") || !html.contains("src=\"http"), "no external resources");
+        // Where it came from: a plain link in the footer, which loads nothing.
+        assert!(html.contains("<a href=\"https://github.com/yazhiniyanMS/nexus\">"));
         // Without an index there is nothing to report.
         db.conn().execute("DELETE FROM intel_files", []).unwrap();
         assert!(report_html(&db.conn(), "p", &dir).unwrap_err().to_string().contains("Build the code index first"));

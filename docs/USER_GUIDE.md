@@ -34,7 +34,7 @@ Import folders (they are never moved or changed). Tabs: **Files** (a read-only v
 
 Built from a code index of Rust, TypeScript, JavaScript, Python and Go (**Rebuild index** after large changes; there is no file watcher).
 
-- **Map** — modules at one, two or three folder levels, or the file graph; optional external packages. Click a node for what it imports and what imports it; drag to move, scroll to zoom. Red outlines mark dependency cycles.
+- **Map** — modules at one, two or three folder levels, or the file graph; optional external packages. Click a node for what it imports and what imports it; drag to move, scroll to zoom. Red outlines mark dependency cycles. **Copy as Mermaid** copies the current map as a Mermaid diagram — GitHub shows it as a picture in a README, issue or pull request. It contains module or file names and the imports between them, never source code.
 - **Symbols** — ranked symbol search with references and a file preview.
 - **Ask** — a question about the code, answered by a model with the files and lines it used. Works with a local model; a remote one asks you to confirm first. Credentials in the excerpts are masked before they are sent.
 - **Docs** — a deterministic architecture document (Markdown), optionally with a model-written narrative; and the HTML report.
